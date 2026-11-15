@@ -1,0 +1,44 @@
+@import './chrome.css';
+
+:root {
+  --sl-font: var(--font-sans);
+  --sl-font-mono: var(--font-mono);
+  --sl-color-accent-low: #edf3ff;
+  --sl-color-accent: #2563eb;
+  --sl-color-accent-high: #1d4ed8;
+  --sl-color-bg: #f4f6f8;
+  --sl-color-bg-nav: #ffffff;
+  --sl-color-bg-sidebar: #f4f6f8;
+  --sl-content-width: 48rem;
+  --sl-nav-height: 4rem;
+}
+body { font-family: var(--font-sans); }
+.header { padding: 0; border-bottom: 1px solid var(--line); }
+.header-inner { width: min(1320px, calc(100% - 48px)); }
+.header-inner a { color: var(--ink-2); text-decoration: none; }
+.header-inner .brand { color: var(--ink); }
+.header-inner .btn-primary { color: white; }
+.header-inner button { font-family: inherit; }
+.header-inner .mobile-menu a { text-decoration: none; }
+.guide-description { color: var(--ink-2); font-size: 1rem; line-height: 1.8; margin-top: 1rem; }
+.guide-meta { display: flex; flex-wrap: wrap; gap: .5rem 1rem; color: var(--ink-3); font-size: .75rem; margin-top: 1rem; }
+.sl-markdown-content { line-height: 1.85; }
+.sl-markdown-content h2 { scroll-margin-top: 7rem; }
+.sl-markdown-content table { display: block; max-width: 100%; overflow-x: auto; font-size: .875rem; }
+.sl-markdown-content :not(pre) > code { overflow-wrap: anywhere; }
+.sl-markdown-content .docs-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.sl-markdown-content .docs-card { display: block; margin: 0; padding: 1.25rem; border: 1px solid var(--line); border-radius: 10px; background: white; color: var(--ink); text-decoration: none; }
+.sl-markdown-content .docs-card h3 { margin: 0; font-size: 1rem; }
+.sl-markdown-content .docs-card p { margin-top: .5rem; color: var(--ink-3); font-size: .875rem; }
+.sl-markdown-content .docs-card .icon { margin-bottom: .75rem; }
+.search-result { text-decoration: none; color: var(--ink); }
+.search-dialog { color-scheme: light; }
+.search-dialog input { color: var(--ink); }
+@media (max-width: 50rem) {
+  .header-inner { width: calc(100% - 32px); gap: 12px; }
+  .header-actions { gap: 8px; }
+  .sl-markdown-content .docs-cards { grid-template-columns: 1fr; }
+}
+@media (max-width: 49.999rem) {
+  .header { padding-inline-end: 3.5rem; }
+}

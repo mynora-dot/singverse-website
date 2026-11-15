@@ -1,0 +1,24 @@
+# Allowlist: local configs, secrets, history, caches and old builds never enter the context.
+**
+!Dockerfile
+!package.json
+!package-lock.json
+!.npmrc
+!astro.config.mjs
+!tsconfig.json
+!src/
+!src/**
+!public/
+!public/**
+!scripts/
+!scripts/**
+!infra/
+!infra/nginx/
+!infra/nginx/nginx.conf
+**/.env
+**/.env.*
+**/.git
+**/.git/**
+**/node_modules
+**/node_modules/**
+**/*.local

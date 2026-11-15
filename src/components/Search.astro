@@ -1,0 +1,13 @@
+<button class="search-trigger" type="button" data-search-open aria-label="搜索文档">
+  <span data-icon="search"></span><span class="search-trigger-label">搜索</span><kbd>⌘K</kbd>
+</button>
+<dialog class="search-dialog" aria-label="搜索文档" data-search-dialog>
+  <div class="search-dialog-head">
+    <span data-icon="search"></span>
+    <input type="search" placeholder="搜索轮唱、录音、伴奏、部署…" aria-label="搜索文档" autocomplete="off" />
+    <button class="search-dialog-close" type="button" aria-label="关闭搜索">×</button>
+  </div>
+  <div class="search-results" aria-live="polite"><p class="search-empty">输入关键词搜索全部文档</p></div>
+  <div class="search-dialog-foot"><span>↑ ↓ 选择</span><span>Enter 打开</span><span>Esc 关闭</span></div>
+</dialog>
+<script>import '../scripts/search.js';</script>

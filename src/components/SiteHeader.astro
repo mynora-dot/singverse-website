@@ -1,0 +1,36 @@
+---
+import Search from "./Search.astro";
+interface Props { docsMenu?: boolean }
+const { docsMenu = false } = Astro.props;
+---
+
+  <div class="header-inner">
+    <a class="brand" href="/index.html" aria-label="SingVerse 首页">
+      <img src="/assets/brand/logo-mark.svg" alt="" width="28" height="28">
+      <span>SingVerse</span>
+    </a>
+    <nav class="site-nav" aria-label="主导航">
+      <a href="/index.html#product" data-nav="product">产品</a>
+      <a href="/index.html#workflow" data-nav="workflow">使用流程</a>
+      <a href="/docs/index.html" data-nav="docs">文档</a>
+      <a href="/download.html" data-nav="download">客户端下载</a>
+    </nav>
+    <div class="header-actions">
+      <Search />
+      <a class="header-github" href="https://github.com/mynora-dot/singverse-go-backend" target="_blank" rel="noreferrer">GitHub</a>
+      <a class="btn btn-primary btn-small header-cta" href="/docs/getting-started.html">开始部署</a>
+      {!docsMenu && <button class="menu-toggle" type="button" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu" aria-label="打开菜单">
+        <span data-icon="menu"></span>
+      </button>}
+    </div>
+  </div>
+  {!docsMenu && <div class="mobile-menu" id="mobile-menu" hidden>
+    <a href="/index.html#product">产品</a>
+    <a href="/index.html#workflow">使用流程</a>
+    <a href="/docs/index.html">文档</a>
+    <a href="/download.html">客户端下载</a>
+    <a href="https://github.com/mynora-dot/singverse-go-backend" target="_blank" rel="noreferrer">GitHub</a>
+    <a class="btn btn-primary" href="/docs/getting-started.html">开始部署</a>
+  </div>}
+
+<script>import "../scripts/site.js";</script>

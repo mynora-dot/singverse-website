@@ -1,0 +1,10 @@
+---
+import PageTitle from '@astrojs/starlight/components/PageTitle.astro'
+const { entry } = Astro.locals.starlightRoute
+---
+<PageTitle />
+<p class="guide-description">{entry.data.description}</p>
+{entry.data.verifiedAt && <div class="guide-meta">
+  <time datetime={entry.data.verifiedAt}>内容核对：{entry.data.verifiedAt}</time>
+  <span>基于当前源码 · 功能以部署版本为准</span>
+</div>}
