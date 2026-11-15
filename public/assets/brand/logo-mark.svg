@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254">
+  <title>SingVerse</title>
+  <desc>Blue S ribbon, orbital band and one four-point star. Resolution-independent brand master.</desc>
+  <defs>
+    <linearGradient id="ribbon" gradientUnits="userSpaceOnUse" x1="350" y1="410" x2="899" y2="908">
+      <stop offset="0" stop-color="#137CFF"/>
+      <stop offset="0.5" stop-color="#0648CC"/>
+      <stop offset="1" stop-color="#002D9D"/>
+    </linearGradient>
+    <linearGradient id="upperFold" gradientUnits="userSpaceOnUse" x1="372" y1="340" x2="919" y2="251">
+      <stop offset="0" stop-color="#1278F8"/>
+      <stop offset="1" stop-color="#38B2F4"/>
+    </linearGradient>
+    <linearGradient id="lowerFold" gradientUnits="userSpaceOnUse" x1="318" y1="1040" x2="969" y2="855">
+      <stop offset="0" stop-color="#0873FF"/>
+      <stop offset="1" stop-color="#3FBEFA"/>
+    </linearGradient>
+    <linearGradient id="orbit" gradientUnits="userSpaceOnUse" x1="125" y1="790" x2="1130" y2="470">
+      <stop offset="0" stop-color="#0051FF"/>
+      <stop offset="0.5" stop-color="#2799F7"/>
+      <stop offset="0.78" stop-color="#54D2F3"/>
+      <stop offset="1" stop-color="#2395FA"/>
+    </linearGradient>
+    <linearGradient id="star" gradientUnits="userSpaceOnUse" x1="1067" y1="178" x2="1067" y2="403">
+      <stop offset="0" stop-color="#43C7FF"/>
+      <stop offset="0.55" stop-color="#0A72F5"/>
+      <stop offset="1" stop-color="#0644D0"/>
+    </linearGradient>
+  </defs>
+  <!-- Rear orbit sits behind the ribbon; the front pass is drawn last. -->
+  <path fill="url(#orbit)" d="M329 575 C220 641 116 730 105 776 L213 747 C241 699 278 660 341 620 Z"/>
+  <path fill="url(#ribbon)" d="M938 362 C928 260 835 187 713 187 C558 181 420 262 345 361 C278 448 280 534 333 607 C376 666 449 690 528 722 C627 763 729 806 770 851 C799 884 787 911 757 921 C665 935 566 908 474 870 C410 843 355 839 307 863 C265 883 251 921 259 966 C279 1073 406 1132 554 1133 C733 1135 903 1061 973 953 C1021 879 1011 794 967 730 C921 664 833 613 733 575 C637 539 556 517 520 482 C488 451 501 418 527 408 C566 388 615 405 660 429 C707 457 753 472 793 467 C870 465 938 417 938 362 Z"/>
+  <path fill="url(#upperFold)" d="M938 362 C928 260 835 187 713 187 C558 181 420 262 345 361 C362 436 412 478 559 519 C507 490 490 460 507 429 C528 390 623 347 746 323 C840 302 918 326 938 362 Z"/>
+  <path fill="url(#lowerFold)" d="M269 1000 C301 1085 419 1133 554 1133 C733 1135 903 1061 973 953 C1021 879 1011 794 967 730 C964 806 915 865 837 910 C721 972 473 976 269 1000 Z"/>
+  <path fill="url(#orbit)" d="M105 776 C90 831 142 846 242 833 C559 816 1049 606 1147 488 C1183 443 1189 399 1101 357 C1157 401 1137 444 1098 479 C949 613 600 736 345 757 C254 767 206 757 213 734 C182 741 140 758 105 776 Z"/>
+  <path fill="url(#star)" d="M1067 178 C1080 244 1102 274 1176 295 C1103 314 1081 340 1065 403 C1050 341 1024 316 959 295 C1024 279 1051 251 1067 178 Z"/>
+</svg>

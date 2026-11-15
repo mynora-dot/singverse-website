@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>电视端 · SingVerse 文档</title>
+  <meta name="description" content="Android TV 负责大屏点歌和实际播放。遥控器方向键选择、确认键操作，配套新版通过 Go 统一管理自动开唱、公平轮唱和亲友遥控。">
+  <link rel="icon" href="{{root}}/assets/brand/favicon.ico">
+  <script type="module" src="{{root}}/src/main.js"></script>
+</head>
+<body data-root="{{root}}" data-docs-page="tv" data-docs-group="家庭开唱">
+<!-- partial:header -->
+<main id="main">
+  <div class="docs-layout">
+    <!-- partial:docs-sidebar -->
+    <div class="docs-main">
+      <article class="docs-article">
+        <button class="docs-mobile-toggle" type="button" data-docs-toggle aria-expanded="false" aria-controls="docs-navigation"><span data-icon="menu"></span>文档目录</button>
+        <header class="docs-article-header">
+          <nav class="docs-breadcrumb" aria-label="面包屑"><a href="{{root}}/index.html">首页</a><span data-icon="chevron-right"></span><a href="{{root}}/docs/index.html">文档</a><span data-icon="chevron-right"></span><span>家庭开唱</span></nav>
+          <h1>电视端</h1>
+          <p>Android TV 负责大屏点歌和实际播放。遥控器方向键选择、确认键操作，配套新版通过 Go 统一管理自动开唱、公平轮唱和亲友遥控。</p>
+          <div class="docs-meta"><time datetime="2026-11-15">内容核对：2026-11-15</time><span>基于当前源码 · 功能以部署版本为准</span></div>
+        </header>
+        <details class="docs-local-toc" data-local-toc><summary>本页内容</summary><nav aria-label="本页章节"></nav></details>
+        <h2 id="install">安装</h2>
+        <ol>
+          <li>确认 NAS 已部署包含 TV 发行包的管理平台镜像。</li>
+          <li>在电视浏览器打开 <code>http://&lt;NAS 局域网 IP&gt;:18080/downloads/</code>。</li>
+          <li>下载并安装 <code>singverse-tv.apk</code>，Android 8+ 首次需允许该来源安装。</li>
+        </ol>
+        <p>最低系统为 Android 5.0（minSdk 21）。下载页会显示真实版本、大小、ABI 和校验信息；缺包时保持不可用空态。Debug 与正式签名不同，不能互相覆盖。</p>
+        <h2 id="login">登录 NAS</h2>
+        <p>未登录时显示三种方式：账号登录、局域网搜索 NAS、手机扫码登录。</p>
+        <table class="docs-table">
+          <thead><tr><th>方式</th><th>操作</th><th>条件</th></tr></thead>
+          <tbody>
+            <tr><td>手机扫码</td><td>电视显示短期登录码，用已登录音乐库的新版手机 App 扫描并确认</td><td>手机和电视在同一私有 IPv4 网络且可互访</td></tr>
+            <tr><td>账号登录</td><td>选择 HTTP/HTTPS，填写 NAS 地址、管理员账号密码和 MFA</td><td>手动地址始终可用</td></tr>
+            <tr><td>局域网搜索</td><td>查找 <code>_singverse._tcp</code>，选择候选后仍需账号验证</td><td>部署方已发布 mDNS，网络不隔离组播</td></tr>
+          </tbody>
+        </table>
+        <div class="callout callout-info">
+          <span data-icon="info"></span>
+          <p>登录二维码五分钟失效，退出、后台或刷新会作废。成功后电视凭据通过 Android Keystore 加密保存；管理员密码和 Cookie 不交给电视。</p>
+        </div>
+        <h2 id="queue">点歌与队列</h2>
+        <p>点歌中心保留搜索、歌手、分类和 NAS 共享歌单四个入口。搜索结果、分类结果、歌手歌曲和歌单歌曲统一为列表，上下键选择，确认直接加入待唱，右键查看详情。</p>
+        <ul>
+          <li>配套新版在空闲状态首首入队自动开唱；手动停止后需明确开始，旧版本按实际提示确认。</li>
+          <li>“已点”只列等待中的歌曲，正在演唱或等待确认的歌曲独立置顶。</li>
+          <li>FAIR 模式按人轮唱，支持下一首优先、取消插队、公平打乱和移除；旧队列按旧协议提供排序操作。</li>
+          <li>点歌结果未知时，先核对队列，再用原请求 ID 重试，避免重复点歌。</li>
+          <li>暂停接单、结束聚会和开始新聚会位于“设置 → 聚会管理”。</li>
+        </ul>
+        <h2 id="playback">播放控制</h2>
+        <p>演唱页确认键打开控制层，支持暂停、继续、重唱、±10 秒和本机停止。新版由 Go 统一推进切歌与自然结束，电视按确认后的状态播放下一首，不自行重复推进。</p>
+        <ul>
+          <li>聚焦进度条后，左右键每次预览 ±10 秒，按确认才实际跳转。</li>
+          <li>视频控制栏播放中无操作约 8 秒后收起，确认或上下键再次打开。</li>
+          <li>应用后台会暂停；进程重建后须重新确认开唱。</li>
+          <li>手动停止持久保留停止状态，新增点歌不会恢复；播放失败或结果未知时先核对当前状态，再明确重试。</li>
+        </ul>
+        <h2 id="lyrics">歌词与音轨</h2>
+        <p>Go 提供同目录、同文件名主体的 <code>.lrc</code> / <code>.srt</code> / <code>.vtt</code> 外置歌词，单文件上限 128 KiB。缺少有效外置 LRC 时，也读取已保存的内嵌歌词。无时间歌词会标记“未同步歌词”，不编造同步时间。</p>
+        <ul>
+          <li>原唱 / 伴奏按用户听辨后记录的音轨或声道切换，不猜测第二轨含义。</li>
+          <li>双声道 PCM 可选择左、右、混合单声道；源文件变化后旧映射失效。</li>
+          <li>升降调范围 ±6 半音，速度保持 1 倍；应用音量 0–100%。</li>
+          <li>外置歌词偏移 ±5 秒；PCM 音频可延后 0–500ms。</li>
+          <li>音量和偏移保存在本机，音调每首恢复原调，不修改 NAS 文件。</li>
+        </ul>
+        <h2 id="compatibility">兼容播放</h2>
+        <p>电视先尝试本机解码。编码或容器不支持时，同一演唱实例最多自动请求一次兼容资源，输出 H.264 / AAC-LC。网络、鉴权和音频路由错误显示真实失败，不触发转码。</p>
+        <div class="callout callout-warn">
+          <span data-icon="alert"></span>
+          <p>兼容转码需要可用计算节点，或提前准备离线兼容版本。没有节点时，应先准备设备能直放的媒体。真实 NAS、硬件加速和播放并发仍需按实际素材压测。</p>
+        </div>
+        <h2 id="old-tv">老电视兼容</h2>
+        <p>Android 5.0/5.1 首次运行默认开启“老电视兼容”，可在“播放设置 → 同步设置”切换自动检测或兼容模式。兼容档只报告 H.264、最高 1280×720 / 30fps / 4Mbps、8-bit SDR 和双声道，HLS 使用 MPEG-TS 分片。</p>
+        <h2 id="settings">首页与收藏</h2>
+        <p>首页展示推荐 Banner、常驻手机点歌二维码、四个快捷入口和横向曲库。管理端“客厅 → 电视首页”可配置多图轮播、标题和说明，同一 NAS 的电视共用配置，约 30 秒同步。</p>
+        <p>电视“收藏”读取 NAS 共享集合，与后台和手机联动。收藏按钮收到服务端成功响应后才更新；切 NAS 或退出会清空集合。</p><h2 id="fair-queue">公平轮唱与亲友遥控</h2>
+<p>新版 FAIR 队列按点歌人轮转，每人一首，同一人按自己的点歌顺序。临时插队只占唯一的下一首优先位，消费后恢复正常轮转；公平打乱改变人员顺序，不打散个人 FIFO。</p>
+<p>所有已加入亲友都可以遥控、设置下一首优先和公平打乱；普通亲友只撤回自己的歌，主持人可撤回其他人的待唱。锁队、清空、散场与参与者管理仍在电视。</p>
+<p>进度、原伴、纠正应用等操作取决于电视真实声明能力。旧 TV 会显示升级提示，不把未知命令当作成功。详见 <a href="{{root}}/docs/party.html">亲友点歌与公平轮唱</a>。</p>
+<h2 id="reactions">互动与声音设置</h2>
+<p>亲友发送点赞、鼓掌或喝彩，电视以无音效透明动效显示约两秒；电视可以关闭并保存偏好。切歌、重连与过期事件不会反复展示。</p>
+<p>应用音量、电视系统音量和外接音响音量是不同层级。音轨切换无声时先核对实际映射、系统输出与解码，不要仅提高应用音量。真实硬件直通、蓝牙和音响延迟需分别试听。</p>
+<h2 id="daily-check">每次聚会前的小检查</h2>
+<ol><li>确认 NAS 地址可达、电视已登录正确曲库。</li><li>试播一首真实歌曲，核对原伴、歌词、音量和画面。</li><li>扫描本场邀请，测试手机点歌与暂停，确认电视返回执行结果。</li><li>若使用 WebDAV 或转码，提前试播对应素材，避免开场才发现节点或远端离线。</li><li>聚会结束在电视散场，按需要保留或清理本场队列；不会删除原媒体。</li></ol>
+        <nav class="docs-pager" aria-label="文档翻页"><a href="{{root}}/docs/collections.html"><span>上一篇</span>家庭收藏与歌单</a><a href="{{root}}/docs/mobile.html"><span>下一篇</span>手机练唱与录音</a></nav>
+      </article>
+      <aside class="docs-toc" data-toc aria-label="本页目录"><h3>本页目录</h3></aside>
+    </div>
+  </div>
+</main>
+<!-- partial:footer -->
+</body>
+</html>

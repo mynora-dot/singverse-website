@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>存储、外观与 AI 设置 · SingVerse 文档</title>
+  <meta name="description" content="管理 NAS 缓存、电视首页和可选 AI 服务。理解共享容量、保护规则、配置保存位置与每项增强能力的实际边界。">
+  <link rel="icon" href="{{root}}/assets/brand/favicon.ico">
+  <script type="module" src="{{root}}/src/main.js"></script>
+</head>
+<body data-root="{{root}}" data-docs-page="advanced" data-docs-group="系统管理">
+<!-- partial:header -->
+<main id="main">
+  <div class="docs-layout">
+    <!-- partial:docs-sidebar -->
+    <div class="docs-main">
+      <article class="docs-article">
+        <button class="docs-mobile-toggle" type="button" data-docs-toggle aria-expanded="false" aria-controls="docs-navigation"><span data-icon="menu"></span>文档目录</button>
+        <header class="docs-article-header">
+          <nav class="docs-breadcrumb" aria-label="面包屑"><a href="{{root}}/index.html">首页</a><span data-icon="chevron-right"></span><a href="{{root}}/docs/index.html">文档</a><span data-icon="chevron-right"></span><span>系统管理</span></nav>
+          <h1>存储、外观与 AI 设置</h1>
+          <p>管理 NAS 缓存、电视首页和可选 AI 服务。理解共享容量、保护规则、配置保存位置与每项增强能力的实际边界。</p>
+          <div class="docs-meta"><time datetime="2026-11-15">内容核对：2026-11-15</time><span>基于当前源码 · 功能以部署版本为准</span></div>
+        </header>
+        <details class="docs-local-toc" data-local-toc><summary>本页内容</summary><nav aria-label="本页章节"></nav></details>
+        <div class="callout callout-info">
+          <span data-icon="info"></span>
+          <p>管理端入口名称可能随版本略有调整。请以实际部署的“设置”“计算与模型”“存储与缓存”“客厅”页面为准。</p>
+        </div>
+
+        <h2 id="compute">计算节点</h2>
+        <p>计算节点是可选的 Python 服务，负责媒体探测、内嵌标签读取、兼容转码、音轨分析和伴奏分离等重任务。Go 主服务负责编排、鉴权、队列和结果落盘；电视、手机、亲友 H5 和管理浏览器都不直接访问计算节点。</p>
+        <table class="docs-table">
+          <thead><tr><th>模式</th><th>适用场景</th><th>行为</th></tr></thead>
+          <tbody>
+            <tr><td>自动识别</td><td>同一部署组合已提供计算服务</td><td>读取部署变量并测试内部连接与回源地址。</td></tr>
+            <tr><td>独立部署</td><td>计算节点在另一台机器或容器</td><td>填写节点地址和内部凭据，测试通过后保存；凭据不回显。</td></tr>
+            <tr><td>暂不使用</td><td>只使用文件名索引和可直放媒体</td><td>停用新转码、分离和探测任务，已有缓存仍可管理。</td></tr>
+          </tbody>
+        </table>
+        <h3>配置步骤</h3>
+        <ol>
+          <li>进入“设置 → 计算与模型”或性能节点页面，选择连接模式。</li>
+          <li>独立部署时填写计算节点可达地址和内部认证信息；地址必须能从 Go 服务访问。</li>
+          <li>执行连接测试。测试会检查节点身份、内部认证，以及节点回到 Go 服务的回调链路。</li>
+          <li>测试通过后保存。失败时保留原设置，不会静默切换到不可用节点。</li>
+          <li>在歌曲播放、原唱与伴奏或元数据任务中按需使用计算能力。</li>
+        </ol>
+        <h3>局域网发现与配对</h3>
+        <p>管理端可在受限私网范围内发现计算节点，并通过发现结果配对。配对不接受浏览器随意指定节点地址或凭据；节点需开启局域网配对，已绑定节点只允许相同身份恢复。发现记录短期有效，配对失败保留当前连接和草稿。</p>
+        <h3>硬件与模型</h3>
+        <ul>
+          <li>页面只显示实际检测到的加速硬件和必要的 CPU 降级配置，不承诺所有机器都有 GPU 加速。</li>
+          <li>伴奏模型可通过固定清单下载、受控导入、试跑和选择；上传大小和模型类型有上限。</li>
+          <li>分离配方可选择极速、干净或旧版高级路线；不同配方和输出格式会隔离缓存。</li>
+          <li>计算节点重启后，未完成的执行会标记失败，不会冒充已完成结果。</li>
+        </ul>
+        <div class="callout callout-warn">
+          <span data-icon="alert"></span>
+          <p>计算节点离线时，已有缓存仍可读取和管理，但新的兼容转码、音轨分析和伴奏分离无法执行。原始媒体始终只读。</p>
+        </div>
+
+        <h2 id="ai">AI 设置</h2>
+        <p>AI 设置分为“模型服务”“搜索服务”“功能配置”三个页签。服务配置和功能绑定分开管理，便于多个功能复用同一厂商，也便于单独停用某个能力。</p>
+        <ul>
+          <li><strong>模型服务：</strong>配置厂商、模型 ID、密钥和结构化输出方式。模型 ID 手填，Schema 或 JSON 模式显式选择。</li>
+          <li><strong>搜索服务：</strong>配置可用于辅助查询的搜索能力。测试结果只展示标题、链接、摘要和耗时，不抓取正文，也不用于分类。</li>
+          <li><strong>功能配置：</strong>把已保存服务绑定到分类或默认搜索等支持的功能，控制启用与间隔；歌单辅助在歌单编辑器选择模型。</li>
+        </ul>
+        <h3>使用边界</h3>
+        <ol>
+          <li>先保存服务，再执行测试；测试只请求已保存配置。</li>
+          <li>密钥只写不读，接口和页面不会回显明文密钥。</li>
+          <li>被功能引用的服务不能直接删除或停用，需先调整绑定。</li>
+          <li>未配置 AI 时，手动曲库管理、点歌和播放仍可使用。</li>
+        </ol>
+        <div class="callout callout-info">
+          <span data-icon="shield"></span>
+          <p>启用外部模型、搜索或元数据平台前，请确认对应服务条款和网络可达性。自动平台写入默认关闭，人工确认优先于自动证据。</p>
+        </div>
+
+        <h2 id="cache">缓存管理</h2>
+        <p>“设置 → 存储与缓存”展示 NAS 上保存的 WebDAV 原片块和完整音视频兼容结果。缓存用于减少回源和重复转码，不等同于原始媒体，也不等同于独立保存的离线兼容版本。</p>
+        <h3>容量与策略</h3>
+        <ul>
+          <li>默认预算为 50 GiB。尚未手动保存设置时，每次启动会检测缓存目录所在磁盘可用空间；空间不足时使用剩余空间的 80%。</li>
+          <li>手动保存后，重启保留已保存容量。手动容量范围为 64 MiB 到 1 PiB。</li>
+          <li>策略可选混合评分 HYBRID 或手动 MANUAL。混合评分结合真实播放热度、最近活动和近 7 天有效频次。</li>
+          <li>高/低水位默认 90% / 75%，要求低水位小于高水位；磁盘最低保留空间独立生效。</li>
+        </ul>
+        <h3>固定与保护</h3>
+        <ul>
+          <li>固定按歌曲生效，覆盖同曲现有及未来原片/HLS 变体；固定不强制下载整曲，也不变成离线成品。</li>
+          <li>正在播放、正在下载、固定歌曲和近 24 小时实际播放受保护。暂停、缓冲和预取不刷新实际播放保护。</li>
+          <li>单份删除须先取消固定；近期保护需要明确确认，活动播放/下载保护不可绕过。</li>
+          <li>清理全部和按策略回收在后台执行（手动策略不能执行按混合策略回收），可显示等待、进行、取消、部分失败和保护阻塞；重新进入页面可恢复未完成任务。</li>
+        </ul>
+        <div class="callout callout-ok">
+          <span data-icon="check"></span>
+          <p>清空缓存不会删除原始媒体、正式歌曲资料或持久附件。计算节点离线时，仍可管理已有缓存。</p>
+        </div>
+
+        <h2 id="tv-home">电视首页</h2>
+        <p>“客厅 → 电视首页”提供即时预览，用于配置所有登录同一 NAS 的电视共用首页。内置默认封面随 Go 服务发布，不依赖外部图床。</p>
+        <table class="docs-table">
+          <thead><tr><th>项目</th><th>限制或行为</th></tr></thead>
+          <tbody>
+            <tr><td>封面数量</td><td>最多 8 张 JPEG/PNG。</td></tr>
+            <tr><td>单张图片</td><td>不超过 2,000,000 字节，边长不超过 4096 像素；保存时归一为最长边 1280px 的 JPEG。</td></tr>
+            <tr><td>标题与说明</td><td>标题最长 80 字符，说明最长 160 字符。</td></tr>
+            <tr><td>轮播</td><td>可开关，间隔 5～60 秒。</td></tr>
+            <tr><td>精选歌单</td><td>最多展示 4 个已保存共享歌单。</td></tr>
+          </tbody>
+        </table>
+        <h3>保存与同步</h3>
+        <ol>
+          <li>上传封面即保存并启用；移除、排序和启停按页面提示保存。</li>
+          <li>标题、说明和轮播草稿需点击保存；有草稿时先保存再上传或移除图片。</li>
+          <li>版本冲突会提示，不会静默覆盖其他管理员的修改。</li>
+          <li>电视端约 30 秒同步一次，也可手动刷新。亲友参与身份不能读取首页配置图片。</li>
+        </ol>
+
+        <h2 id="backup">备份与升级</h2>
+        <p>升级前先做停机备份。数据库、主密钥和计算节点认证必须配套保存；只备份数据库而丢失主密钥，可能无法恢复加密凭据。</p>
+        <h3>备份清单</h3>
+        <table class="docs-table">
+          <thead><tr><th>内容</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>业务数据库与持久资料</td><td>SQLite/MySQL 数据、正式附件和业务衍生文件。</td></tr>
+            <tr><td>主密钥</td><td>保护 WebDAV、AI、节点认证等加密凭据，须与数据库同版本配套。</td></tr>
+            <tr><td>计算节点认证与设置</td><td>独立计算节点的身份、认证和硬件设置。</td></tr>
+            <tr><td>下载与缓存卷</td><td>下载卷保存实际歌曲，应纳入备份；歌曲缓存可按策略重建，计算 cache 卷内的设置需保留。</td></tr>
+            <tr><td>外部媒体</td><td>NAS 原曲库和 WebDAV 远端按各自存储策略备份，SingVerse 不修改原件。</td></tr>
+          </tbody>
+        </table>
+        <h3>升级步骤</h3>
+        <ol>
+          <li>停止业务服务，完成数据库、密钥和持久卷备份。</li>
+          <li>源码路线更新完整同版本源码后，使用原组合执行构建和启动；镜像路线固定新版本后拉取并启动。</li>
+          <li>保留现有命名卷和本地配置，不任意删除数据卷。</li>
+          <li>确认健康检查、登录、亲友 H5、播放和计算功能后结束维护。</li>
+        </ol>
+        <div class="callout callout-warn">
+          <span data-icon="alert"></span>
+          <p>旧镜像不一定能读取新迁移后的数据库。回退需要恢复匹配的数据和密钥备份，不能直接把新数据库交给旧镜像。</p>
+        </div><h2 id="cache-states">读懂缓存的容量与份数</h2>
+<p>同一首歌可以有原片块和不同画质、音轨、字幕的兼容结果，因此“缓存份数”不等于歌曲数。原片可能只有头尾或部分区间，只有完整状态才表示整曲字节已缓存。</p>
+<p>占用还可能包括正在接收与待清理残留；预留字节单独展示。目录实际占用与列表已发布条目的合计可能不同，不能直接当作漏记。</p>
+<p>原片块与兼容结果共享容量。缓存不足时会跳过新增缓存或继续回源/使用当前计算产物，不把容量预算等同于原曲无法播放。独立离线兼容版本不由这项预算自动淘汰。</p>
+<h2 id="cleanup">按策略回收、清理全部与保护</h2>
+<ul><li>HYBRID 达高水位后按混合评分回收到低水位，容量已在目标以下时不保证释放大量空间。</li><li>MANUAL 不自动淘汰，也不能用“按策略回收”临时执行混合回收；可按界面清理允许的副本。</li><li>固定按歌曲覆盖现有与未来缓存，但不强制下载整首；固定记录可以没有实际缓存。</li><li>固定、正在播放/下载、有效预取及近 24 小时实播有保护，受保护内容可能使目标不可达。</li><li>取消清理保留已完成删除，离页后台继续；部分完成、保护阻塞与失败分别查看。</li></ul>
+<h2 id="classification">分类与 AI 助手展示</h2>
+<p>“曲库 → 分类标签”维护语种、年代、风格、情绪、场景及自定义标签。AI 分类使用功能绑定的模型，结果仍需业务校验与按配置确认；普通生成测试成功不等于分类正确。</p>
+<p>模型、搜索与音乐平台是不同设置。搜索服务测试只查询主动输入的关键词，不抓取正文，不会自动用于分类。外部请求失败不会静默切换协议或自动重试付费调用。</p>
+<p>AI 助手当前提供入口、宠物/聊天框形态和展示偏好；对话与工具能力尚未开放。开启展示不自动绑定模型，不授予曲库读写工具，也不代表助手能代替管理员操作。</p>
+<h2 id="appearance">管理端与设备的外观偏好</h2>
+<p>管理网页提供浅色和深色主题，保存在当前浏览器，不随系统自动切换。手机标准/长辈模式、电视的音量与同步偏好各自在设备本机保存；电视首页内容则由 NAS 统一配置。</p>
+<p>需要完整说明时查看：<a href="{{root}}/docs/compute.html">计算节点与兼容播放</a>、<a href="{{root}}/docs/operations.html">备份与升级</a>、<a href="{{root}}/docs/security.html">账号与隐私</a>。</p>
+        <nav class="docs-pager" aria-label="文档翻页"><a href="{{root}}/docs/compute.html"><span>上一篇</span>计算节点与兼容播放</a><a href="{{root}}/docs/security.html"><span>下一篇</span>账号、安全与隐私</a></nav>
+      </article>
+      <aside class="docs-toc" data-toc aria-label="本页目录"><h3>本页目录</h3></aside>
+    </div>
+  </div>
+</main>
+<!-- partial:footer -->
+</body>
+</html>

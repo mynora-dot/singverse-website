@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>播放与热门、缺歌心愿 · SingVerse 文档</title>
+  <meta name="description" content="最近播放和热门来自实际演唱，缺歌心愿保留原始反馈与处理结果。理解计次规则，才能区分排队、试听、实播和真正补齐。">
+  <link rel="icon" href="{{root}}/assets/brand/favicon.ico">
+  <script type="module" src="{{root}}/src/main.js"></script>
+</head>
+<body data-root="{{root}}" data-docs-page="activity" data-docs-group="家庭开唱">
+<!-- partial:header -->
+<main id="main">
+  <div class="docs-layout">
+    <!-- partial:docs-sidebar -->
+    <div class="docs-main">
+      <article class="docs-article">
+        <button class="docs-mobile-toggle" type="button" data-docs-toggle aria-expanded="false" aria-controls="docs-navigation"><span data-icon="menu"></span>文档目录</button>
+        <header class="docs-article-header">
+          <nav class="docs-breadcrumb" aria-label="面包屑"><a href="{{root}}/index.html">首页</a><span data-icon="chevron-right"></span><a href="{{root}}/docs/index.html">文档</a><span data-icon="chevron-right"></span><span>家庭开唱</span></nav>
+          <h1>播放与热门、缺歌心愿</h1>
+          <p>最近播放和热门来自实际演唱，缺歌心愿保留原始反馈与处理结果。理解计次规则，才能区分排队、试听、实播和真正补齐。</p>
+          <div class="docs-meta"><time datetime="2026-11-15">内容核对：2026-11-15</time><span>基于当前源码 · 功能以部署版本为准</span></div>
+        </header>
+        <details class="docs-local-toc" data-local-toc><summary>本页内容</summary><nav aria-label="本页章节"></nav></details>
+        <h2 id="entry">入口与统计来源</h2>
+<p>管理端“客厅 → 播放与热门”提供热门排行、播放明细及单曲历史；“客厅 → 缺歌心愿”处理想唱却找不到的歌。新版亲友 H5 还可以查看最近、热门并提交缺歌反馈。</p>
+<p>播放记录来自 TV、手机本机播放和管理员试听的真实上报。亲友点歌由实际播放的电视上报，不再计一次。仅入队、预取、缓存命中或拖动到结尾都不算有效演唱。</p>
+<h2 id="popular">什么才算一次有效播放</h2>
+<table class="docs-table"><thead><tr><th scope="col">情况</th><th scope="col">是否计入热门</th></tr></thead><tbody><tr><td>非后台试听，实际播放至少 30 秒</td><td>计一次，即使之后切歌、失败或中断</td></tr><tr><td>已知时长不足 30 秒的歌曲</td><td>须自然结束，且实播达到歌曲总时长</td></tr><tr><td>未知时长、实播不足 30 秒</td><td>不能套用短曲完整播放规则</td></tr><tr><td>管理员后台试听</td><td>保留活动明细，但不计热门有效次数</td></tr><tr><td>暂停、缓冲、拖动进度</td><td>不增加实际播放时长</td></tr><tr><td>自然结束</td><td>只是结束结果，不代表每一秒都被完整听过</td></tr></tbody></table><p>同一播放实例最多计一次。不同歌曲 ID 和不同文件版本分别统计，不按同名曲自动合并。榜单默认近 30 天，也可选近 7 天、全部；统计来自当前 NAS，不是平台全网热度。</p>
+<h2 id="history">明细、最近与结果</h2>
+<p>明细保存当时的歌名、歌手、版本、来源、设备、点歌人、时间、实播时长与结果；歌曲后来改名或移除，仍保留历史快照。点歌人不等于演唱者。</p><table class="docs-table"><thead><tr><th scope="col">结果</th><th scope="col">说明</th></tr></thead><tbody><tr><td>播放中</td><td>实例仍在活动，暂停和缓冲不会另建结束记录</td></tr><tr><td>自然结束</td><td>媒体报告结束</td></tr><tr><td>已切歌 / 已停止</td><td>用户或遥控明确结束</td></tr><tr><td>播放失败</td><td>实际播放发生错误</td></tr><tr><td>已中断</td><td>异常退出或 120 秒没有活动心跳等中断情况</td></tr></tbody></table><p>亲友“最近”按歌曲去重，排除后台试听与零实播；“热门”按有效次数排序。不可用历史歌曲保留标题并禁点。时间筛选按服务端滚动区间计算，页面按浏览器本地时区显示。</p>
+<h2 id="missing">亲友提交缺歌心愿</h2>
+<ol><li>先搜索曲库，确认不是别名、版本或筛选条件导致找不到。</li><li>打开亲友端“反馈缺失歌曲”，填写必填歌名；歌手、版本、说明按需补充。</li><li>提交后等待明确结果。超时保留同一请求和内容，先核对再重试。</li><li>服务端记录 PARTY 来源与实际提交人，亲友不能伪造管理员身份。</li></ol>
+<p>登记只创建反馈，不会自动下载、扫描或修改歌曲。不同音源与版权授权仍由实际使用者处理。</p>
+<h2 id="handling">管理员如何处理反馈</h2>
+<table class="docs-table"><thead><tr><th scope="col">状态</th><th scope="col">处理方式</th></tr></thead><tbody><tr><td>待处理</td><td>核对原始歌名、歌手、版本、说明和提交者</td></tr><tr><td>处理中</td><td>开始查找或整理，可填写处理备注</td></tr><tr><td>已补齐</td><td>必须关联当前曲库内真实可用的一首歌</td></tr><tr><td>已关闭</td><td>本次不处理，可记录原因</td></tr></tbody></table><p>反馈可重开，离开已补齐状态会清除原关联与补齐时间。原始反馈保持只读，处理只更新状态、备注和关联。已关联歌曲后来不可用时，反馈保留并显示实际可用情况。</p>
+<p>多人处理同一反馈时会校验修订号，冲突后重新读取再决定，不能覆盖另一处刚保存的结果。</p>
+<h2 id="troubleshooting">播放了却没有统计</h2>
+<ol><li>确认实际播放端连接的是当前 NAS，客户端支持真实活动上报。</li><li>区分“播放明细”和“热门”：不足有效阈值可能有明细却没有榜单次数。</li><li>检查是否为管理员试听、是否筛选了错误时间范围。</li><li>若发生离线、服务重启或旧客户端未上报，不能根据当前位置补造历史。</li><li>继续播放一首可用测试歌曲，观察实际时长及服务日志，勿直接修改数据库造数。</li></ol>
+<p>播放与反馈随业务数据库备份；当前没有任意创建、编辑或删除历史的管理入口。</p>
+        <nav class="docs-pager" aria-label="文档翻页"><a href="{{root}}/docs/party.html"><span>上一篇</span>亲友点歌与公平轮唱</a><a href="{{root}}/docs/tasks.html"><span>下一篇</span>任务中心</a></nav>
+      </article>
+      <aside class="docs-toc" data-toc aria-label="本页目录"><h3>本页目录</h3></aside>
+    </div>
+  </div>
+</main>
+<!-- partial:footer -->
+</body>
+</html>

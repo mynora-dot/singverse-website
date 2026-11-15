@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>常见问题与排障 · SingVerse 文档</title>
+  <meta name="description" content="先辨认网络、账号、媒体、任务还是版本问题，再按现象定位。这里集中解释安装、扫描、轮唱、遥控、缓存和手机作品中常见的疑问。">
+  <link rel="icon" href="{{root}}/assets/brand/favicon.ico">
+  <script type="module" src="{{root}}/src/main.js"></script>
+</head>
+<body data-root="{{root}}" data-docs-page="faq" data-docs-group="帮助">
+<!-- partial:header -->
+<main id="main">
+  <div class="docs-layout">
+    <!-- partial:docs-sidebar -->
+    <div class="docs-main">
+      <article class="docs-article">
+        <button class="docs-mobile-toggle" type="button" data-docs-toggle aria-expanded="false" aria-controls="docs-navigation"><span data-icon="menu"></span>文档目录</button>
+        <header class="docs-article-header">
+          <nav class="docs-breadcrumb" aria-label="面包屑"><a href="{{root}}/index.html">首页</a><span data-icon="chevron-right"></span><a href="{{root}}/docs/index.html">文档</a><span data-icon="chevron-right"></span><span>帮助</span></nav>
+          <h1>常见问题与排障</h1>
+          <p>先辨认网络、账号、媒体、任务还是版本问题，再按现象定位。这里集中解释安装、扫描、轮唱、遥控、缓存和手机作品中常见的疑问。</p>
+          <div class="docs-meta"><time datetime="2026-11-15">内容核对：2026-11-15</time><span>基于当前源码 · 功能以部署版本为准</span></div>
+        </header>
+        <details class="docs-local-toc" data-local-toc><summary>本页内容</summary><nav aria-label="本页章节"></nav></details>
+        <h2 id="discovery">手机或电视找不到 NAS</h2>
+        <ol>
+          <li>确认手机、电视和 NAS 在同一局域网或可路由网段，访客网络、AP 隔离和防火墙可能阻断发现与访问。</li>
+          <li>确认 Go 服务绑定到局域网可达地址。Docker 默认入口是 <code>127.0.0.1:18080</code>，只适合本机；其他设备访问需设置 <code>SINGVERSE_HTTP_BIND</code> 为本机局域网 IP。</li>
+          <li>确认端口一致：Docker 默认 <code>18080</code>，原生 Go 默认 <code>8080</code>。手动地址形如 <code>http://192.168.1.10:18080</code>。</li>
+          <li>如需自动发现，macOS 可运行 <code>make lan-discovery</code>；Linux NAS 需通过 Avahi 发布 <code>_singverse._tcp</code>。</li>
+          <li>发现失败时仍可手动输入地址。电视和手机端都支持手动连接已可达的 NAS。</li>
+        </ol>
+        <pre><code># macOS 开发机发布局域网发现
+make lan-discovery</code></pre>
+        <div class="callout callout-info">
+          <span data-icon="wifi"></span>
+          <p>mDNS 只是发现入口，不替代 HTTP 可达性。能发现但打不开页面时，优先检查绑定地址、端口和防火墙。</p>
+        </div>
+
+        <h2 id="playback">播放失败或无法解码</h2>
+        <ol>
+          <li>确认文件仍存在且后端可读。Docker 本地目录必须先挂载到容器；WebDAV 源需账号可读。</li>
+          <li>扩展名可入库不代表浏览器或电视一定能解码。MP4/WebM 也可能包含不支持的编码，MKV/AVI 等更依赖兼容处理。</li>
+          <li>在播放设置中尝试兼容播放或已生成的离线版本。新的 H.264/AAC 兼容资源需要可用计算节点。</li>
+          <li>WebDAV 播放需要远端支持直接 GET 和 Range。返回下载跳转、忽略非零 Range 或压缩正文时，Go 会拒绝交给播放器。</li>
+          <li>使用外部反向代理时，关闭媒体缓冲和缓存，支持 Range/HEAD，并设置足够读取超时。</li>
+        </ol>
+        <div class="callout callout-warn">
+          <span data-icon="alert"></span>
+          <p>管理端在线播放只播放原始音视频或已协商的兼容资源，不保证所有容器和编码都能播放。真实电视、浏览器和 NAS 环境需单独验收。</p>
+        </div>
+
+        <h2 id="webdav">WebDAV 扫描失败</h2>
+        <table class="docs-table">
+          <thead><tr><th>现象</th><th>优先检查</th></tr></thead>
+          <tbody>
+            <tr><td>401 / 403</td><td>账号、密码或应用密码是否正确，账号是否开启 WebDAV 读取权限。</td></tr>
+            <tr><td>404</td><td>目录地址是否包含正确的 <code>/dav/</code> 和挂载路径，是否填写最终目录地址。</td></tr>
+            <tr><td>502 或重定向错误</td><td>扫描和播放不自动跟随 3xx；OpenList 等返回下载跳转的配置需调整为直接读取。</td></tr>
+            <tr><td>证书错误</td><td>HTTPS 证书需被 Go 服务所在系统信任；私有 CA 由部署者配置，不提供关闭验证开关。</td></tr>
+            <tr><td>扫描超时或超限</td><td>单层条目过多或网盘慢时拆分来源；后台任务有目录数、条目数、时间和响应大小限制。</td></tr>
+          </tbody>
+        </table>
+        <p>目录扫描阶段默认只枚举文件名，不向媒体发送 GET/HEAD。只有显式启用内嵌元数据提取后，才会通过受控 Range 读取标签、技术信息、封面和歌词。突然空扫描会保留旧索引，避免空挂载被当作全删。</p>
+
+        <h2 id="password">忘记管理员密码</h2>
+        <p>登录页提供“忘记密码”。重置码只能由部署主机生成，不能通过 HTTP 接口远程生成，也不使用 MFA 恢复码代替密码重置码。</p>
+        <ol>
+          <li>在登录页查看并复制对应部署命令；原生二进制命令为 <code>singverse --issue-password-reset</code>。</li>
+          <li>停止业务进程，在部署主机的真实交互终端执行命令，并按提示输入 <code>RESET</code>。</li>
+          <li>命令输出 43 位一次性重置码，15 分钟有效；再次生成立即撤销旧码。</li>
+          <li>回到登录页提交账号、重置码和 15～128 个字符的新密码。</li>
+          <li>重置成功后所有会话被撤销，MFA 保留；用新密码和已配置的 MFA 重新登录。</li>
+        </ol>
+        <pre><code># 在部署主机执行，先停止业务进程
+singverse --issue-password-reset</code></pre>
+        <div class="callout callout-warn">
+          <span data-icon="lock"></span>
+          <p>如果同时丢失 MFA，需使用仅部署主机可执行的紧急恢复流程。Docker 部署请按登录页生成的对应命令操作，不要在不匹配的环境里生成重置码。</p>
+        </div>
+
+        <h2 id="update">客户端没有更新提示</h2>
+        <ul>
+          <li>电视和手机更新包来自已连接 NAS 的客户端发行页，不来自官方中央 APK 托管。</li>
+          <li>发布新客户端后，需要重新打包包含发行包的管理平台镜像，并升级 NAS 部署；只更新官网不会让 NAS 出现新 APK。</li>
+          <li>客户端会校验版本、摘要和签名。Debug 与 Release 签名不能互相覆盖安装。</li>
+          <li>电视端要求 Android 5.0 及以上，手机端要求 Android 7.0 及以上；低于最低系统版本不会提供可用安装包。</li>
+        </ul>
+
+        <h2 id="ios">是否有 iOS 版本</h2>
+        <p>当前手机客户端为 Android 工程，没有 iOS App。iPhone 和 iPad 可通过电视邀请二维码打开亲友 H5，完成昵称加入、点歌、公平轮唱、电视遥控、家庭收藏和互动（按配套版本能力）。管理入口也可用浏览器打开，但完整客户端体验以 Android 电视和 Android 手机为准。</p>
+
+        <h2 id="privacy">数据与隐私</h2>
+        <ul>
+          <li>曲库索引、正式资料、收藏、歌单、播放历史和缓存保存在自己的 NAS 或部署数据库中。</li>
+          <li>原始媒体只读；扫描、元数据整理和缓存清理不会修改或删除原曲文件。</li>
+          <li>WebDAV、AI 和计算节点凭据加密保存，接口不回显明文密钥。</li>
+          <li>启用外部元数据平台、模型服务或搜索服务时，相关查询会发送到所配置服务；未启用时不依赖这些外部能力。</li>
+          <li>请使用自备或已获授权的歌曲，并遵守当地版权规定。本项目不提供中央音乐内容托管。</li>
+        </ul>
+        <div class="callout callout-info">
+          <span data-icon="shield"></span>
+          <p>公网访问建议使用 HTTPS 反向代理，并保留同源、会话和 CSRF 校验。备份时数据库与主密钥必须配套保存。</p>
+        </div><h2 id="codes">先分清三个二维码</h2>
+<table class="docs-table"><thead><tr><th scope="col">二维码</th><th scope="col">谁来扫</th><th scope="col">用途</th></tr></thead><tbody><tr><td>客户端下载码</td><td>手机 / 电视浏览器</td><td>打开当前 NAS 下载页，只读下载安装包</td></tr><tr><td>电视首次登录码</td><td>已登录曲库的 Android 手机 App</td><td>核对并给电视连接当前 NAS，不是亲友加入</td></tr><tr><td>本场手机点歌邀请</td><td>微信 / 浏览器 / App 聚会入口</td><td>填写昵称确认，取得本场亲友身份</td></tr></tbody></table>
+<h2 id="autoplay">为什么有的版本自动开唱、有的要确认</h2>
+<p>配套新版 Go、TV、H5 使用 FAIR 队列与能力声明，空闲时首首入队自动开唱，切歌和自然结束由 Go 统一推进。旧电视沿用原协议，按界面提示确认。</p>
+<p>即使是新版，手动停止、进程恢复或需要明确重试的错误状态，也不会仅因新点歌擅自恢复。先核对当前状态，再点击开始。</p>
+<h2 id="remote">遥控“已发送”，电视为什么没动</h2>
+<p>已发送只说明命令被接受，电视还需完成实际执行。先看电视在线状态、能力与执行结果；切原伴或定位需要重建媒体时可能有准备时间。旧电视不支持的能力会明确禁用或提示升级。</p>
+<p>歌曲已经变化时，旧切歌确认和旧进度请求会冲突，不作用下一首。刷新当前状态后重新决定，不反复点相同按钮。</p>
+<h2 id="fairness">公平队列为什么不是按入队时间排序</h2>
+<p>新版按人每人一首轮唱，每个人自己的歌仍保留点歌顺序。公平打乱只调整人员轮转，临时插队只有一个下一首优先位；唱完优先项再回正常轮转。详见 <a href="{{root}}/docs/party.html#queue">公平轮唱</a>。</p>
+<h2 id="favorites">不同设备收藏不一致</h2>
+<p>确认连的是同一 NAS，并使用支持共享收藏的配套版本。重新进入或恢复前台会刷新，后台、手机与电视前台约 30 秒同步。失败保留旧值并提示，不回退到旧本地收藏，也不自动导入旧收藏。</p>
+<p>新版亲友收藏也是全家共享，其他人取消会影响同一集合。缺失歌曲可取消但不可播放。</p>
+<h2 id="metadata">资料已改，为什么仍显示待复核</h2>
+<p>文件名待复核和正式资料确认是不同状态。单曲手工确认不会伪造新的文件名匹配结果；独立单曲修改也不会追溯改写旧批次审核历史。查看对应来源、正式资料和批次各自含义。</p>
+<h2 id="cache">固定了为什么没下载整首，清理为什么没腾空间</h2>
+<p>固定只保护该歌曲现有与未来缓存，不触发完整下载。原片可能只缓存头尾，份数也不等于歌曲数。清理受固定、近 24 小时实播、活动播放/下载和预取保护，可能无法达到目标。</p>
+<p>MANUAL 不执行混合策略回收；取消清理不会恢复已经删除的副本。原始媒体与独立离线兼容版本不在普通缓存清理范围。</p>
+<h2 id="recording">手机作品会同步到 NAS 吗</h2>
+<p>当前不会自动同步。录音、草稿、混音和作品保存在手机；保存后可本机回放，导出由你选择文件位置。卸载、清除应用数据或更换手机前先导出重要作品。家庭收藏在 NAS，不代表手机作品也在 NAS。</p>
+<h2 id="download">已经开了音乐平台，为何不能下载歌曲</h2>
+<p>音乐平台设置用于搜索资料与封面；下载歌曲另需自备 LX 2.0 GoScript 音源及可写本地保存位置。初始化测试不保证每首歌可下载，具体可用平台和音质由音源声明。详见 <a href="{{root}}/docs/resources.html">下载歌曲</a>。</p>
+<h2 id="tasks">任务显示处理完成，为何还待审核</h2>
+<p>处理完成指这一轮流程结束，待审核、失败和跳过也属于已处理。歌曲信息需要明确应用，资料包需要预览确认，下载需发布和入库，伴奏需可用成品；每种任务看对应业务结果。</p>
+<h2 id="compute-callback">节点健康正常，为何仍不能转码</h2>
+<p>健康只说明进程活着。还需节点身份、内部认证、compute 到 Go 的回源、工具能力、素材读取、模型和硬件试跑。容器 localhost 与宿主地址混用是常见原因。先做管理端双向连接测试，再试具体任务。</p>
+<h2 id="assistant">AI 助手能自动管理曲库吗</h2>
+<p>当前助手只开放展示与入口，对话及工具能力尚未开放。AI 分类和歌单辅助是独立业务流程，需配置服务并按页面确认；打开宠物或聊天框展示不会自动授权操作。</p>
+<h2 id="report">反馈问题时提供什么</h2>
+<p>提供发生时间与时区、Go/前端/客户端版本、部署方式、实际操作、错误状态、相关任务或批次编号，以及能否用另一台设备复现。媒体问题补充容器、编码、音轨和直放/兼容差异。</p>
+<p>隐藏管理员密码、MFA、重置码、Cookie、Bearer、节点密钥和邀请二维码。不要上传整份生产数据库来代替最小复现。维护与回退方法见 <a href="{{root}}/docs/operations.html">备份、升级与维护</a>。</p>
+        <nav class="docs-pager" aria-label="文档翻页"><a href="{{root}}/docs/operations.html"><span>上一篇</span>备份、升级与维护</a></nav>
+      </article>
+      <aside class="docs-toc" data-toc aria-label="本页目录"><h3>本页目录</h3></aside>
+    </div>
+  </div>
+</main>
+<!-- partial:footer -->
+</body>
+</html>

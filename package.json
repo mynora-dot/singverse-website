@@ -1,0 +1,18 @@
+{
+  "name": "@singverse/website",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^22.19.0 || ^24.0.0 || >=26.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "check:content": "node scripts/content.mjs",
+    "check": "npm run check:content && npm run build"
+  },
+  "devDependencies": {
+    "vite": "8.3.5"
+  }
+}
