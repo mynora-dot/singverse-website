@@ -5,7 +5,7 @@ FROM ${NODE_IMAGE} AS build
 WORKDIR /site
 ENV ASTRO_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json .npmrc ./
-RUN npm ci --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm,sharing=locked npm ci --no-audit --no-fund
 COPY astro.config.mjs tsconfig.json ./
 COPY src ./src
 COPY public ./public

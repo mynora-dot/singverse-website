@@ -45,23 +45,22 @@ group: "系统管理"
 
 本官网是独立的内容站点。更新 `singverse-website` 不会替换 Go 内置的管理网页、H5、APK 或已运行的 NAS。
 
-## 通过 Actions 发布到三个镜像仓库 {#image-publishing}
+## 通过 Actions 发布到两个镜像仓库 {#image-publishing}
 
-Go 仓库的 `platform-release` 发布 `singverse`；compute 仓库的 `singverse-compute-images` 发布 `singverse-compute` 的各运行库。每次正式发布都向 GHCR、Docker Hub、阿里云 ACR 三个目的地推送已验收的同一批 OCI 产物。
+Go 仓库的 `platform-release` 发布 `singverse`；compute 仓库的 `singverse-compute-images` 发布 `singverse-compute` 的各运行库。每次正式发布都向 GHCR、Docker Hub 两个目的地推送已验收的同一批 OCI 产物。
 
-发布者在对应仓库的 Actions 页面选择工作流，点击 Run workflow，填写下列参数。`release_tag` 必须指向该仓库已有的正式 GitHub Release；不能是草稿或预发布，并须等于该标签源码中的 `v` 加根 `VERSION`。工作流使用所选标签的代码与已锁定产物。
+发布者先提交并推送源码和工作流，在对应仓库的 Releases 页面发布指向该提交的正式 Release，例如 `v1.2.3`。工作流只响应正式 `release.published`，跳过草稿和 Pre-release；普通 push、PR、单独推送 tag 不发布，也没有 Run workflow 入口。版本从标签注入，不维护源码 VERSION 文件。
 
-| Action 参数 | 填写内容 | 留空时 |
+| Actions Variable | 填写内容 | 留空时 |
 | --- | --- | --- |
-| `release_tag` | 已有正式 Release，如 `v1.2.3`（示例） | Go 发布必填；compute 留空只构建与检查，不推送 |
-| `ghcr_namespace` | 小写 GHCR 用户或组织名 | 读取 `GHCR_NAMESPACE`；仍为空则使用当前仓库 owner |
-| `dockerhub_namespace` | 小写 Docker Hub 用户或组织名 | 读取 `DOCKERHUB_NAMESPACE` |
-| `acr_registry` | ACR 实例的纯 Registry 域名，不含 `https://` 或路径 | 读取 `ACR_REGISTRY` |
-| `acr_namespace` | 小写 ACR 命名空间 | 读取 `ACR_NAMESPACE` |
+| `GHCR_NAMESPACE` | 小写 GHCR 用户或组织名 | 当前仓库 owner 的小写名称 |
+| `DOCKERHUB_NAMESPACE` | 小写 Docker Hub 用户或组织名 | 必填 |
 
-后四项默认值来自该仓库的 Actions Variables；发布正式 Release 自动触发时也使用这些默认值。参数只选择目的地，不授予权限：所选空间须已授权相应凭据。Docker Hub 使用 `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`，阿里云使用 `ACR_USERNAME` / `ACR_PASSWORD`，均保存在 Actions Secrets。GHCR 默认使用工作流令牌；跨组织或其他 owner 发布可配置有目标写入权限的 `GHCR_USERNAME` / `GHCR_TOKEN`。
+Docker Hub 使用 `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`，保存在 Actions Secrets。GHCR 默认使用工作流令牌；跨组织发布可配置有正式包与构建缓存包写入权限的 `GHCR_USERNAME` / `GHCR_TOKEN`。Go 读取私有前端、手机、TV Release 时，还需要仅对组件仓库授权 Contents: read 的 `CROSS_REPO_READ_TOKEN`。
 
-三处配置齐全后才进入发布；目标固定标签已有不同内容时会失败，全部固定版本成功后才更新主服务的 `latest` 或计算端的 `latest-<runtime>`（例如 `latest-base`）。手动发布历史 Release 也会把所选空间的这些浮动标签更新到该历史版本。重试复用 Release 保存的组件锁与已验收 OCI 归档，不能删除或替换这些附件来覆盖同版本。手动指定另一空间可以复用同一正式版本，部署端再按实际目的地设置 [`IMAGE_PREFIX`](/docs/getting-started.html#image-registry)。
+两个目的地配置齐全后才进入发布。固定标签已有不同内容时会失败，全部固定版本成功后才更新主服务的 `latest` 或计算端的 `latest-<runtime>`，例如 `latest-cuda`。compute 每版只提供 CUDA、ROCm、OpenVINO、RKNN 各一个版本标签和一个 latest 标签，CPU 自动降级包含在镜像内；Mac 使用同一 Release 的原生安装包。
+
+重试直接复用 Release 中的组件锁与 OCI 归档，不重复上传 OCI 到 Actions artifacts。构建层另存于各项目独立的 GHCR `*-buildcache` 包，不增加正式镜像标签；这些缓存不承担正式产物恢复，缓存缺失仍可重新构建。每个 job 都使用独立 runner，各项目之间不共享磁盘。部署端按实际目的地设置 [`IMAGE_PREFIX`](/docs/getting-started.html#image-registry)。
 
 发布工作流成功与实际部署是两步操作；仍需拉取镜像并更新 NAS。完整配置、凭据权限与重试说明见 Go 仓库 `infra/docker/PUBLISHING.md` 和 compute 仓库 `infra/docker/README.md`。
 

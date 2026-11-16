@@ -47,15 +47,14 @@ make docker-down
 默认只启动 Go。计算节点需要通过 Compose profile 显式启用，或在管理端配置独立节点。首次正式发布需按手机、TV、前端、Go 的顺序准备组件。
 :::
 
-## 从 GHCR、Docker Hub 或阿里云拉取镜像 {#image-registry}
+## 从 GHCR 或 Docker Hub拉取镜像 {#image-registry}
 
-发布工作流将同一批已验收镜像推送到 GitHub Container Registry（GHCR）、Docker Hub 和阿里云 ACR。实际项目空间由发布者的 GitHub Actions 参数决定；部署前取得这次发布的仓库地址与版本，再设置 `IMAGE_PREFIX`。以下均为地址格式，尖括号内容需替换。
+发布工作流将同一批镜像推送到 GitHub Container Registry（GHCR）和 Docker Hub。实际项目空间由发布者的 GitHub Actions Variables 决定；部署前取得这次发布的仓库地址与版本，再设置 `IMAGE_PREFIX`。以下均为地址格式，尖括号内容需替换。
 
 | 镜像仓库 | IMAGE_PREFIX 格式 | 空间来自发布参数 |
 | --- | --- | --- |
-| GitHub GHCR | `ghcr.io/<用户或组织>` | `ghcr_namespace` |
-| Docker Hub | `docker.io/<用户或组织>` | `dockerhub_namespace` |
-| 阿里云 ACR | `<ACR Registry 域名>/<命名空间>` | `acr_registry` 与 `acr_namespace` |
+| GitHub GHCR | `ghcr.io/<用户或组织>` | `GHCR_NAMESPACE` |
+| Docker Hub | `docker.io/<用户或组织>` | `DOCKERHUB_NAMESPACE` |
 
 前缀不含 `https://`、镜像名、版本标签或末尾斜杠。Go 镜像为 `<IMAGE_PREFIX>/singverse:<版本>`，计算镜像为 `<IMAGE_PREFIX>/singverse-compute:<版本>-<运行库>`。GitHub Release 使用 `v1.2.3` 形式，镜像版本使用 `1.2.3`，不带开头的 `v`。
 
@@ -64,7 +63,7 @@ make docker-down
 IMAGE_PREFIX=ghcr.io/your-org
 SINGVERSE_VERSION=1.2.3
 COMPUTE_VERSION=1.2.3
-COMPUTE_RUNTIME=base
+COMPUTE_RUNTIME=cuda
 
 # 保存 .env 后，在 Go 仓库根目录拉取并启动
 make docker-pull docker-image-up
@@ -72,7 +71,7 @@ make docker-pull docker-image-up
 
 主服务与计算节点独立发版，`SINGVERSE_VERSION` 和 `COMPUTE_VERSION` 不必相同。同一 Compose 组合共用一个 `IMAGE_PREFIX`；启用计算节点时，该空间必须同时有目标版本的两个镜像。私有仓库先用有拉取权限的账号执行 `docker login <仓库域名>`。
 
-镜像命名空间决定从哪里拉取；Compose 项目名决定本机容器与命名卷归属。切换镜像源时保留既有项目名（默认 `singverse-go-app`）和数据卷。发布者的参数与权限配置见[三仓库镜像发布](/docs/operations.html#image-publishing)。
+镜像命名空间决定从哪里拉取；Compose 项目名决定本机容器与命名卷归属。切换镜像源时保留既有项目名（默认 `singverse-go-app`）和数据卷。发布者的参数与权限配置见[双仓库镜像发布](/docs/operations.html#image-publishing)。
 
 ## 本地源码联调 {#docker-local}
 

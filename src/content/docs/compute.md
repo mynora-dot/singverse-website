@@ -37,21 +37,20 @@ group: "系统管理"
 # singverse-go-backend/.env
 COMPOSE_PROFILES=compute
 COMPUTE_NODE_URL=http://singverse-compute:8090
-COMPUTE_RUNTIME=base
+COMPUTE_RUNTIME=cuda
 ```
 
 本地 `make docker-local-up` 会从所选源码构建 Go 和 compute，和正式镜像路线不同。不要只看宿主 18090 端口，就把容器内部应使用的服务名地址换成 localhost。
 
 ## 选择计算镜像、仓库与版本 {#image-version}
 
-计算镜像独立发布到 GHCR、Docker Hub 和阿里云 ACR，地址为 `<IMAGE_PREFIX>/singverse-compute:<COMPUTE_VERSION>-<COMPUTE_RUNTIME>`。例如版本 `1.2.3` 配合 `base` 得到标签 `1.2.3-base`；示例版本需替换为目标空间实际发布的版本。
+计算镜像独立发布到 GHCR 和 Docker Hub，地址为 `<IMAGE_PREFIX>/singverse-compute:<COMPUTE_VERSION>-<COMPUTE_RUNTIME>`。例如版本 `1.2.3` 配合 `cuda` 得到标签 `1.2.3-cuda`；示例版本需替换为目标空间实际发布的版本。
 
-`IMAGE_PREFIX` 按[镜像仓库说明](/docs/getting-started.html#image-registry)设置为域名与命名空间，`COMPUTE_VERSION` 单独固定计算端版本，`SINGVERSE_VERSION` 只控制 Go。正式部署建议固定已验收版本；`latest-base` 等标签会随后续成功发布更新。
+`IMAGE_PREFIX` 按[镜像仓库说明](/docs/getting-started.html#image-registry)设置为域名与命名空间，`COMPUTE_VERSION` 单独固定计算端版本，`SINGVERSE_VERSION` 只控制 Go。正式部署建议固定已验收版本；`latest-cuda` 等标签会随后续成功发布更新。
 
 | 运行库 | 镜像架构 |
 | --- | --- |
-| `base`、`cpu`、`uvr` | linux/amd64 与 linux/arm64 |
-| `cuda`、`rocm`、`rocm-native`、`openvino` | linux/amd64 |
+| `cuda`、`rocm`、`openvino` | linux/amd64 |
 | `rknn` | linux/arm64 |
 
 同机组合共用主服务的镜像前缀，独立节点在自己的部署配置中选择前缀。镜像空间由[发布 Actions 参数](/docs/operations.html#image-publishing)指定，不决定 Compose 项目名；独立节点继续使用原项目名（默认 `singverse-compute-node`）以保留原卷。镜像运行库仍需匹配宿主驱动、设备映射与模型。
@@ -81,7 +80,7 @@ SINGVERSE_CALLBACK_ORIGIN=http://192.168.1.100:18080
 
 ## 视频加速与音频推理分开配置 {#hardware}
 
-视频转码后端与伴奏推理运行库不是同一件事。Docker 音频运行库可选 base、cpu、uvr、cuda、rocm、rocm-native、openvino、rknn；实际架构与模型需按运行库核对。
+视频转码后端与伴奏推理运行库不是同一件事。Docker 音频运行库可选 cuda、rocm、openvino、rknn，每种镜像内置 CPU 自动降级，不提供独立 CPU 镜像；实际架构与模型需按运行库核对。
 
 | 硬件方向 | 需要核对 |
 | --- | --- |

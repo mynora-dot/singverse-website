@@ -23,16 +23,14 @@ VARIANTS = {'website': ['amd64', 'arm64']}
 def config(env=os.environ):
     version = release_version(env)
     ghcr = env.get('GHCR_NAMESPACE') or env.get('GITHUB_REPOSITORY_OWNER', '').lower()
-    hub, acr, host = (env.get(key, '') for key in ('DOCKERHUB_NAMESPACE', 'ACR_NAMESPACE', 'ACR_REGISTRY'))
-    for value in (ghcr, hub, acr):
+    hub = env.get('DOCKERHUB_NAMESPACE', '')
+    for value in (ghcr, hub):
         if not re.fullmatch(r'[a-z0-9]+(?:[._-][a-z0-9]+)*', value):
             raise ValueError('Registry namespaces must be configured as lowercase names')
-    if not re.fullmatch(r'[a-z0-9]+(?:[.-][a-z0-9]+)*(?::[0-9]+)?', host):
-        raise ValueError('ACR_REGISTRY must be a registry host, without scheme or namespace')
-    for key in ('GHCR_TOKEN', 'DOCKERHUB_USERNAME', 'DOCKERHUB_TOKEN', 'ACR_USERNAME', 'ACR_PASSWORD'):
+    for key in ('GHCR_TOKEN', 'DOCKERHUB_USERNAME', 'DOCKERHUB_TOKEN'):
         if not env.get(key):
             raise ValueError('Missing publishing secret: ' + key)
-    return version, ['ghcr.io/' + ghcr, 'docker.io/' + hub, host + '/' + acr]
+    return version, ['ghcr.io/' + ghcr, 'docker.io/' + hub]
 
 
 COPY_TIMEOUT_SECONDS = 30 * 60

@@ -45,7 +45,7 @@ docker compose pull
 docker compose up -d --no-build --wait
 ```
 
-`WEBSITE_IMAGE` 也可写入本机未跟踪的 `.env`。Docker Hub 和阿里云地址、发布凭据及重试规则见[镜像发布](infra/docker/PUBLISHING.md)。
+`WEBSITE_IMAGE` 也可写入本机未跟踪的 `.env`。Docker Hub 地址、发布凭据及重试规则见[镜像发布](infra/docker/PUBLISHING.md)。
 
 部署后可运行 HTTP 验证，覆盖旧链接、无扩展名链接、搜索资源、响应头、404 和方法限制：
 
@@ -68,9 +68,9 @@ WEBSITE_BIND=192.168.1.100 WEBSITE_PORT=18081 docker compose up -d --build --wai
 
 `.github/workflows/website-images.yml` 参照后端发布方式，仅在正式 GitHub Release 发布后运行。标签采用 `vMAJOR.MINOR.PATCH`；普通 push、PR、草稿及 Pre-release 不触发发布，不增加独立测试或 lint job。
 
-工作流锁定标签提交，在原生 amd64、arm64 runner 分别构建并保存 OCI 归档，再把同一份产物发布到 GHCR、Docker Hub、阿里云 ACR，镜像名统一为 `singverse-website`。只发布数字版本 `<VERSION>` 和 `latest`，二者均包含双架构，不再额外发布架构标签；三家固定版本全部成功后更新 `latest`。已有固定标签只接受相同摘要，失败重跑复用 Release 归档。历史标签不会自动删除，数字版本随发布累积。
+工作流锁定标签提交，在原生 amd64、arm64 runner 分别构建并保存 OCI 归档，再把同一份产物发布到 GHCR、Docker Hub，镜像名统一为 `singverse-website`。只发布数字版本 `<VERSION>` 和 `latest`，二者均包含双架构，不再额外发布架构标签；两家固定版本全部成功后更新 `latest`。已有固定标签只接受相同摘要，失败重跑复用 Release 归档。历史标签不会自动删除，数字版本随发布累积。
 
-Actions Variables 和 Secrets 与后端同名，但需要在官网仓库配置或通过组织授权共享。完整配置见[镜像发布](infra/docker/PUBLISHING.md)。本地可运行 `npm run check:release` 检查发布脚本的版本校验、归档校验、固定标签保护及三仓库发布顺序；需要 Python 3.9 或以上版本。
+Actions Variables 和 Secrets 与后端同名，但需要在官网仓库配置或通过组织授权共享。完整配置见[镜像发布](infra/docker/PUBLISHING.md)。本地可运行 `npm run check:release` 检查发布脚本的版本校验、归档校验、固定标签保护及双仓库发布顺序；需要 Python 3.9 或以上版本。
 
 ## 安全设置
 

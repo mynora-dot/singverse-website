@@ -11,8 +11,6 @@ env:
   RELEASE_TAG: ${{ github.event.release.tag_name }}
   GHCR_NAMESPACE: ${{ vars.GHCR_NAMESPACE }}
   DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
-  ACR_REGISTRY: ${{ vars.ACR_REGISTRY }}
-  ACR_NAMESPACE: ${{ vars.ACR_NAMESPACE }}
 
 concurrency:
   group: website-${{ github.event.release.tag_name }}
@@ -43,14 +41,13 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
-          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
         run: python3 infra/docker/release.py validate
 
   build:
     needs: preflight
     permissions:
       contents: write
+      packages: write
     env:
       GH_TOKEN: ${{ github.token }}
       SOURCE_REVISION: ${{ needs.preflight.outputs.revision }}
@@ -70,36 +67,43 @@ jobs:
         with:
           ref: ${{ needs.preflight.outputs.revision }}
           persist-credentials: false
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Restore the immutable release archive for retries
         id: archive
         env:
           ARCH: ${{ matrix.arch }}
         run: python3 infra/docker/release-artifact.py restore --name "website-$ARCH.oci.tar"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: steps.archive.outputs.found != 'true'
+      - name: Authenticate the shared build cache
+        if: steps.archive.outputs.found != 'true'
+        env:
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
       - name: Build the architecture release archive
         if: steps.archive.outputs.found != 'true'
         env:
           ARCH: ${{ matrix.arch }}
         run: |
+          namespace="${GHCR_NAMESPACE:-${GITHUB_REPOSITORY_OWNER,,}}"
+          cache="ghcr.io/$namespace/singverse-website-buildcache:$ARCH"
           docker buildx build --file Dockerfile --target runtime \
             --platform "linux/$ARCH" \
             --build-arg "SINGVERSE_VERSION=$SINGVERSE_VERSION" \
             --build-arg "SOURCE_REVISION=$SOURCE_REVISION" \
             --build-arg "SOURCE_URL=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
-            --provenance=false --tag singverse-website:build \
+            --cache-from "type=registry,ref=$cache" \
+            --cache-to "type=registry,ref=$cache,mode=max,ignore-error=true" \
+            --progress=plain --provenance=false --tag singverse-website:build \
             --output type=oci,dest=/tmp/image.tar .
+      - name: Release local build cache before preserving the archive
+        if: steps.archive.outputs.found != 'true'
+        run: docker buildx prune --all --force
       - name: Preserve the archive before publishing any image tag
         if: steps.archive.outputs.found != 'true'
         env:
           ARCH: ${{ matrix.arch }}
         run: python3 infra/docker/release-artifact.py save --name "website-$ARCH.oci.tar"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: website-${{ matrix.arch }}
-          path: /tmp/image.tar
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 7
 
   publish:
     needs: [preflight, build]
@@ -109,30 +113,32 @@ jobs:
       contents: read
       packages: write
     env:
+      GH_TOKEN: ${{ github.token }}
       SINGVERSE_VERSION: ${{ needs.preflight.outputs.version }}
       GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
       GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
-      ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.preflight.outputs.revision }}
           persist-credentials: false
-      - name: Install the registry copy tool
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends skopeo
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: website-*
-          path: artifacts
-          merge-multiple: false
-          digest-mismatch: error
+      - name: Use the preinstalled registry copy tool
+        run: |
+          if ! command -v skopeo >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends skopeo
+          fi
+      - name: Restore immutable Release archives
+        run: |
+          for arch in amd64 arm64; do
+            python3 infra/docker/release-artifact.py restore --name "website-$arch.oci.tar" \
+              --archive "artifacts/website-$arch/image.tar"
+          done
       - name: Authenticate all destinations without printing credentials
         run: |
           printf '%s' "$GHCR_TOKEN" | skopeo login ghcr.io --username "$GHCR_USERNAME" --password-stdin
           printf '%s' "$DOCKERHUB_TOKEN" | skopeo login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
-          printf '%s' "$ACR_PASSWORD" | skopeo login "$ACR_REGISTRY" --username "$ACR_USERNAME" --password-stdin
       - name: Publish immutable images to all registries, then update latest
         run: python3 -u infra/docker/release.py publish --artifacts artifacts
