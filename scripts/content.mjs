@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { resolve, relative } from 'node:path'
-
+import { parameterGroups } from '../src/lib/deployment/parameters.mjs'
 const root = resolve('dist')
 function filesUnder(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
@@ -17,32 +17,29 @@ function decode(text) {
 const files = filesUnder(root)
 const pages = files.filter(file => file.endsWith('.html'))
 const ids = new Map()
-const anchors = JSON.parse(readFileSync('scripts/legacy-anchors.json', 'utf8'))
-let links = 0
-let sections = 0
-let codeBlocks = 0
+let links = 0, codeBlocks = 0
 for (const file of pages) {
   const html = readFileSync(file, 'utf8')
   const found = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => decode(match[1]))
-  assert.equal(new Set(found).size, found.length, relative(root, file) + ': duplicate IDs')
+  assert.equal(new Set(found).size, found.length, relative(root, file) + ': duplicate IDs: ' + found.filter((id, index) => found.indexOf(id) !== index).join(', '))
   ids.set(file, new Set(found))
   assert.equal((html.match(/<h1\b/g) || []).length, 1, file + ': expected one H1')
   assert.match(html, /<title>[^<]+<\/title>/, file + ': missing title')
   assert.match(html, /<meta\s+name="description"\s+content="[^"]+"/, file + ': missing description')
-  assert.doesNotMatch(html, /\{\{root\}\}|<!-- partial:/, file + ': unresolved legacy template')
+  assert.doesNotMatch(html, /\{\{root\}\}|<!-- partial:/, file + ': unresolved template')
 }
-for (const [path, expected] of Object.entries(anchors)) {
-  const file = resolve(root, path)
-  assert.ok(ids.has(file), 'Legacy URL disappeared: ' + path)
-  for (const id of expected) {
-    assert.ok(ids.get(file).has(id), path + ': legacy section disappeared: #' + id)
-    sections++
-  }
-  assert.match(readFileSync(file, 'utf8'), /<time datetime="\d{4}-\d{2}-\d{2}">/, path + ': missing verification date')
-  const markdown = readFileSync('src/content/' + path.replace(/\.html$/, '.md'), 'utf8')
+const guides = readdirSync('src/content/docs').filter(file => /\.mdx?$/.test(file))
+for (const guide of guides) {
+  const markdown = readFileSync('src/content/docs/' + guide, 'utf8')
+  const slug = markdown.match(/^slug: "([^"]+)"$/m)?.[1]
+  assert.ok(slug, guide + ': missing explicit slug')
+  const file = resolve(root, slug + '.html')
+  assert.ok(ids.has(file), guide + ': missing rendered guide')
+  const html = readFileSync(file, 'utf8')
+  assert.match(html, /<time datetime="2026-11-20">/, guide + ': old verification date')
   const expectedCode = [...markdown.matchAll(/^(`{3,})[^\n]*\n([\s\S]*?)\n\1$/gm)].map(match => match[2])
-  const copiedCode = [...readFileSync(file, 'utf8').matchAll(/\bdata-code="([^"]*)"/g)].map(match => decode(match[1]).replace(/\u007f/g, '\n'))
-  assert.deepEqual(copiedCode, expectedCode, path + ': copied code differs from Markdown source')
+  const copiedCode = [...html.matchAll(/\bdata-code="([^"]*)"/g)].map(match => decode(match[1]).replace(/\u007f/g, '\n'))
+  assert.deepEqual(copiedCode, expectedCode, guide + ': copied code differs from source')
   codeBlocks += expectedCode.length
 }
 for (const file of pages) {
@@ -55,16 +52,17 @@ for (const file of pages) {
     const choices = [resolve(root, '.' + path), resolve(root, '.' + path + '.html'), resolve(root, '.' + path, 'index.html')]
     const target = choices.find(candidate => files.includes(candidate))
     assert.ok(target, relative(root, file) + ': missing ' + value)
-    if (target.endsWith('.html') && url.hash) {
-      assert.ok(ids.get(target)?.has(decodeURIComponent(url.hash.slice(1))), relative(root, file) + ': missing anchor ' + value)
-    }
+    if (target.endsWith('.html') && url.hash) assert.ok(ids.get(target)?.has(decodeURIComponent(url.hash.slice(1))), relative(root, file) + ': missing anchor ' + value)
     links++
   }
 }
-assert.ok(existsSync(resolve(root, 'pagefind/pagefind.js')), 'Missing static Pagefind search index')
+const reference = decode(readFileSync(resolve(root, 'docs/parameters.html'), 'utf8'))
+for (const group of parameterGroups) for (const item of group.items) {
+  assert.ok(reference.includes(item.key) && reference.includes(item.description) && reference.includes(item.change), 'Incomplete parameter explanation: ' + item.key)
+}
+assert.ok(existsSync(resolve(root, 'pagefind/pagefind.js')), 'Missing Pagefind index')
 for (const path of files) {
   assert.doesNotMatch(relative(root, path), /(^|\/)(?:\.env(?:\.[^/]+)?|\.git|node_modules|src|package-lock\.json)(?:\/|$)/, 'Source or secret in public output')
   assert.ok(!path.endsWith('.map'), 'Source map in public output: ' + path)
 }
-assert.equal(readdirSync('src/content/docs').filter(file => file.endsWith('.md')).length, Object.keys(anchors).length)
-console.log('Content checks passed:', { pages: pages.length, guides: Object.keys(anchors).length, preservedSections: sections, codeBlocks, localLinks: links })
+console.log('Content checks passed:', { pages: pages.length, guides: guides.length, parameterEntries: parameterGroups.reduce((count, group) => count + group.items.length, 0), codeBlocks, localLinks: links })

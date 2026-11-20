@@ -7,13 +7,17 @@
   },
   "scripts": {
     "dev": "astro dev --host 127.0.0.1 --port 5174",
-    "build": "astro build --force && node scripts/legacy-routes.mjs && node scripts/security-headers.mjs",
-    "preview": "astro preview --host 127.0.0.1 --port 5174",
+    "build": "node scripts/deployment-assets.mjs && astro build --force && node scripts/legacy-routes.mjs && node scripts/security-headers.mjs",
+    "preview": "astro preview --host 127.0.0.1",
     "check:content": "node scripts/content.mjs",
-    "check": "astro check && npm run build && npm run check:content",
+    "check": "npm run test:compose && astro check && npm run build && npm run check:content",
     "check:http": "node scripts/http-check.mjs",
     "check:dependencies": "npm audit --audit-level=high",
-    "check:release": "python3 -m unittest discover -s infra/docker/tests -v"
+    "check:release": "python3 -m unittest discover -s infra/docker/tests -v",
+    "test:compose": "node --test scripts/compose.test.mjs",
+    "check:compose": "node scripts/check-compose.mjs",
+    "check:deployment-sources": "node scripts/check-deployment-sources.mjs",
+    "check:browser": "node scripts/browser-check.mjs"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.12",

@@ -1,107 +1,76 @@
 ---
-title: "备份、升级与维护"
-description: "让数据、密钥、附件和组件版本一起维护。先确认部署身份与恢复路径，再升级服务、分发客户端或切换计算方式。"
+title: "备份、升级与恢复"
+description: "围绕单文件绑定目录部署，保存可恢复的数据、主密钥与版本记录。"
 slug: "docs/operations"
-verifiedAt: "2026-11-15"
-group: "系统管理"
+verifiedAt: "2026-11-20"
+group: "运维"
 ---
 
-## 先记清自己的部署身份 {#inventory}
+## 记下部署身份 {#inventory}
 
-维护前记录实际使用的项目名、配置文件组合、绑定 IP、端口、镜像版本、数据位置和外部媒体挂载。正式项目默认为 `singverse-go-app`，实际卷名带项目名前缀。
+保存实际使用的 YAML、项目名、绝对部署目录、两个镜像的版本或 digest、宿主端口和额外曲库路径。生成器默认名是新部署起点；升级时保留原项目身份，不因换镜像仓库而新建项目。
 
-正式镜像路线使用命名卷，本地源码联调使用 `data/docker/` 目录。两种方式的数据位置不同，切换命令不能自动迁移数据。后续操作沿用最初的完整配置组合。
+## 备份哪些目录 {#backup}
 
-## 停机备份清单 {#backup}
-
-| 内容 | 为什么要备份 |
+| 默认目录 | 内容与恢复要求 |
 | --- | --- |
-| 业务数据库 | 账号、曲库资料、来源、收藏、歌单、历史、反馈、任务与配置 |
-| 匹配主密钥 / secrets | 恢复 MFA、WebDAV、AI、音源与连接凭据 |
-| 持久资料目录 | 正式封面、歌词、受管上传与共享资料附件 |
-| 独立兼容版本与音频成品 | 不是普通临时缓存，按实际需求保留 |
-| 下载卷或 NAS 下载目录 | 已发布的真实歌曲及附件 |
-| 节点认证、硬件与模型设置 | 计算身份及本机可用配置；compute cache 卷不全是可丢弃文件 |
-| 部署配置与版本清单 | 恢复相同镜像、Compose 组合、环境和挂载 |
-| 外部媒体与手机作品 | 分别由 NAS/WebDAV 备份和手机导出，不在业务库里 |
+| singverse-data | SQLite、元数据、封面和衍生文件 |
+| singverse-secrets | 与数据库配套的加密主密钥，必须一起恢复 |
+| singverse-compute-auth | 计算 token，同机两服务保持一致 |
+| singverse-transcode-cache | 计算缓存，同时含硬件/模型选择和试跑记录 |
+| singverse-audio-models | 已准备的固定模型与 RKNN 转换文件 |
+| singverse-media | 默认本地原片；使用外部目录时另行备份实际路径 |
+| singverse-downloads | 下载的真实歌曲，不能按临时缓存清理 |
 
-## 如何做一次可恢复的备份 {#procedure}
+使用 MySQL 时另外执行数据库的一致性备份，仍要保存 Go 的文件与主密钥。WebDAV 原片由对应存储系统备份；NAS 中保存的加密凭据依赖主密钥。
 
-1. 使用当前完整 Compose 组合停止业务，等待进程退出；SQLite 不能把正在写入的单个文件直接当完整备份。
-2. 用 Docker/NAS 卷备份或相应数据库一致性工具备份数据与匹配密钥，保留文件权限。
-3. 单独保护环境文件和版本记录，不把密钥或真实部署配置提交 Git。
-4. 在隔离项目与新卷中恢复，核对登录、来源、附件、播放、收藏及计算连接。
-5. 确认可恢复后再安排正式切换，不能覆盖正在运行的数据库。
-
-停止用 `down` 可保留卷；`down -v` 会删除命名卷，不用于常规维护。不要把清理缓存当作清理业务 data 或 compute 整个设置卷。
-
-## 升级服务与网页 {#upgrade}
-
-1. 核对目标版本与配套组件，先完成停机备份。
-2. 源码路线更新完整源码并按原组合构建；镜像路线固定新版本或摘要后拉取。
-3. 保留项目名、卷、密钥、外部挂载、环境文件和覆盖配置，使用原完整组合启动。
-4. Go 启动应用未部署的增量迁移，迁移失败先保留日志处理，不能清库“修复”。
-5. 验证管理登录、来源读取、正式附件、亲友邀请、真实播放和需要的计算任务。
-
-本官网是独立的内容站点。更新 `singverse-website` 不会替换 Go 内置的管理网页、H5、APK 或已运行的 NAS。
-
-## 通过 Actions 发布到两个镜像仓库 {#image-publishing}
-
-Go 仓库的 `platform-release` 发布 `singverse`；compute 仓库的 `singverse-compute-images` 发布 `singverse-compute` 的各运行库。每次正式发布都向 GHCR、Docker Hub 两个目的地推送已验收的同一批 OCI 产物。
-
-发布者先提交并推送源码和工作流，在对应仓库的 Releases 页面发布指向该提交的正式 Release，例如 `v1.2.3`。工作流只响应正式 `release.published`，跳过草稿和 Pre-release；普通 push、PR、单独推送 tag 不发布，也没有 Run workflow 入口。版本从标签注入，不维护源码 VERSION 文件。
-
-| Actions Variable | 填写内容 | 留空时 |
-| --- | --- | --- |
-| `GHCR_NAMESPACE` | 小写 GHCR 用户或组织名 | 当前仓库 owner 的小写名称 |
-| `DOCKERHUB_NAMESPACE` | 小写 Docker Hub 用户或组织名 | 必填 |
-
-Docker Hub 使用 `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN`，保存在 Actions Secrets。GHCR 默认使用工作流令牌；跨组织发布可配置有正式包与构建缓存包写入权限的 `GHCR_USERNAME` / `GHCR_TOKEN`。Go 读取私有前端、手机、TV Release 时，还需要仅对组件仓库授权 Contents: read 的 `CROSS_REPO_READ_TOKEN`。
-
-两个目的地配置齐全后才进入发布。固定标签已有不同内容时会失败，全部固定版本成功后才更新主服务的 `latest` 或计算端的 `latest-<runtime>`，例如 `latest-cuda`。compute 每版只提供 CUDA、ROCm、OpenVINO、RKNN 各一个版本标签和一个 latest 标签，CPU 自动降级包含在镜像内；Mac 使用同一 Release 的原生安装包。
-
-重试直接复用 Release 中的组件锁与 OCI 归档，不重复上传 OCI 到 Actions artifacts。构建层另存于各项目独立的 GHCR `*-buildcache` 包，不增加正式镜像标签；这些缓存不承担正式产物恢复，缓存缺失仍可重新构建。每个 job 都使用独立 runner，各项目之间不共享磁盘。部署端按实际目的地设置 [`IMAGE_PREFIX`](/docs/getting-started.html#image-registry)。
-
-发布工作流成功与实际部署是两步操作；仍需拉取镜像并更新 NAS。完整配置、凭据权限与重试说明见 Go 仓库 `infra/docker/PUBLISHING.md` 和 compute 仓库 `infra/docker/README.md`。
-
-## 客户端安装包与配套发布 {#clients}
-
-手机和电视更新包来自 NAS 当前镜像内的只读发行文件。发布了新 APK 后，还需把通过校验的发行包重新装入 Go 平台镜像并升级 NAS，设备下载页才会出现新版本。
-
-构建发行组合通常先准备手机、TV、完整前端静态包，再打包 Go。协议上线是另一件事：本轮公平队列与亲友遥控 v2 需要按 Go → TV → H5 顺序启用。两种顺序分别描述产物准备和运行协议升级。
-
-客户端覆盖安装需版本与长期签名兼容；Debug 和 Release 不能互相覆盖。原生 Go 可用 `SINGVERSE_CLIENT_RELEASE_DIRECTORY` 指向包含 mobile、tv 的发行目录。
-
-## 升级失败如何回退 {#rollback}
-
-保留错误日志、数据卷与升级前备份。旧镜像不一定能读取新迁移后的数据库，回退需要恢复匹配版本的数据、密钥和持久附件，再使用相应版本启动。
-
-不要仅把镜像标签调旧就假定安全回退，也不要把失败容器与业务卷一起删除。旧 Java 部署的数据库不能直接当作 Go 业务库复用；历史卷应独立保留并按实际迁移方案处理。
-
-## 日常检查与问题记录 {#checks}
-
-- 确认服务健康、管理员登录、客户端下载和邀请入口。
-- 观察磁盘空闲、缓存预算、下载目录、持久附件和离线成品的实际占用。
-- 检查任务中心排队原因、失败批次及来源定时扫描结果。
-- 定期用目标电视试播本地、WebDAV、原伴和兼容素材。
-- 发生问题记录日期时间、版本、操作、任务编号和错误状态；隐藏令牌、密钥与真实媒体路径。
+## 一次可恢复的停机备份 {#procedure}
 
 ```sh
-# 本地源码组合：在 singverse-go-backend 仓库执行
-make docker-local-status
-make docker-local-logs
-
-# 查看当前部署的既有只读检查入口
-make docker-check
+docker compose -f docker-compose.yaml stop
 ```
 
-检查命令的认证条件以当前仓库说明为准；不要在共享命令历史直接填写密码。真实 MySQL、GPU、微信和硬件设备检查需在对应环境完成。
+确认服务退出后，使用 NAS 备份工具把 YAML 与上述目录复制到独立位置，保留隐藏文件、权限和文件内容。不要把正在写入的 SQLite 文件简单复制当成完整备份。备份结束可用原配置启动：
 
-## 升级后快速验收 {#verification}
+```sh
+docker compose -f docker-compose.yaml up -d --no-build --wait --wait-timeout 180
+```
 
-1. 手机浏览器从 LAN 地址打开下载页，核对可用版本与二维码地址。
-2. 后台查看来源、歌曲、封面、收藏及历史，确认没有连到空的新数据卷。
-3. 电视登录并播一首，手机点歌、暂停和切歌，核对执行反馈。
-4. 使用计算节点时试跑探测与兼容任务，验证双向回源。
-5. 手机回听原有作品，确认覆盖安装保留本机数据。
-6. 完成后再结束维护，保留升级前备份和本次版本记录。
+在另一份数据副本、独立项目名及端口中演练恢复，检查账号登录、密钥解密、原片读取和计算连接。恢复验证实例不能同时写生产 SQLite。
+
+## 升级镜像 {#upgrade}
+
+先完成备份并记录旧版本，在 YAML 中分别修改 Go 和 compute 的 `image` 为目标已发布版本。然后执行：
+
+```sh
+docker compose -f docker-compose.yaml pull
+docker compose -f docker-compose.yaml up -d --no-build --wait --wait-timeout 180
+docker compose -f docker-compose.yaml ps
+docker compose -f docker-compose.yaml logs --tail=100
+```
+
+检查登录、下载页、少量真实播放和计算任务。单纯 `restart` 不会读取新环境变量或换镜像。切换 Docker Hub/GHCR 时也保留数据目录、项目名与版本，先核对实际镜像摘要。
+
+## 从命名卷或其他配置迁移 {#migration}
+
+先用原配置停止旧部署并备份，确认实际 Docker 卷名和容器挂载。将 data、secrets、token、设置、模型、下载等内容分别迁入新绑定目录，再用新 YAML 启动。改成 `./singverse-data:/data` 不会自动复制命名卷内容；空目录可能表现为全新安装。
+
+不要边运行旧实例边迁移 SQLite。保留旧卷直到新实例完整验收，原始媒体默认只读。旧 Java 数据库与 Go 数据库不能直接互换；没有明确迁移路径时使用独立新库。
+
+## 回退 {#rollback}
+
+新版本可能执行数据库迁移，旧镜像未必能读新结构。需要回退时停止新服务，恢复匹配的旧数据库、主密钥和相关文件，再使用记录的旧镜像。保留失败日志和原备份，不用删库重置掩盖升级问题。
+
+## 客户端与网站的更新 {#clients}
+
+管理网页与 APK 随 Go 镜像提供，升级网站不会更新它们。新 APK 需要进入新的业务镜像，客户端从 NAS `/downloads/` 获取或检查更新。覆盖安装需要正确包名、递增版本和相同长期签名；手机本地作品升级前自行导出。
+
+发布者的组件与镜像流程见[开发与发行](/docs/development.html#publishing)。部署者不需要构建前端或设置 Actions Secrets。
+
+## 停止与日常检查 {#checks}
+
+```sh
+docker compose -f docker-compose.yaml down
+```
+
+`down` 保留绑定目录。不要另外删除数据目录或主密钥。排障记录镜像标签、实际架构、失败步骤、时间和脱敏日志；计算故障额外记录驱动、设备路径和所选模型，见[常见问题](/docs/faq.html)。

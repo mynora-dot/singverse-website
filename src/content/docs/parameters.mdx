@@ -1,0 +1,68 @@
+---
+title: "部署参数手册"
+description: "完整解释管理端、计算端、数据库和驱动参数：用途、默认值、单位、修改条件及持久化影响。"
+slug: "docs/parameters"
+verifiedAt: "2026-11-20"
+group: "部署"
+---
+import ParameterReference from '../../components/deployment/ParameterReference.astro'
+
+这里的默认值对应[单文件生成器](/docs/compose.html)，不等于原生进程或旧仓库 `.env` 模板的默认值。页面表单把设置写进 `environment` 或 Compose 服务参数，运行时无需 `.env`。空字符串表示关闭可选功能或交由程序默认处理，不是漏填。
+
+修改 YAML 后执行 `docker compose -f docker-compose.yaml up -d --no-build --wait --wait-timeout 180` 重建配置有变化的容器。仅执行 `restart` 不会加载新环境变量。网页已保存的缓存策略、节点连接、硬件选择等可能优先于部署默认。
+
+## Compose 自身参数
+
+这些键由 Docker 使用，不能随意挪到 `environment` 下。
+
+| 参数 | 默认 / 单位 | 用途与修改条件 |
+| --- | --- | --- |
+| `name` | `singverse-go-app`；RK 测试为 `singverse-rk3566-test` | 项目身份，影响容器和网络归属。原部署升级保持原值；独立测试要同时换目录和端口。 |
+| `image` | `docker.io/mynora/singverse:latest`；计算端加运行库后缀 | 完整镜像地址。Go 与 compute 独立选版本，需确认标签真实存在。正式使用可固定已发布版本或 digest；生成器支持标签，digest 可手工填入 YAML。 |
+| `platform` | `linux/amd64` 或 `linux/arm64` | 与宿主和镜像架构匹配。RKNN 为 ARM64，其他三种运行库为 AMD64；模拟运行不能替代 GPU 透传。 |
+| `user` | `"0:0"` | 覆盖镜像默认 UID 10001，便于自动创建的绑定目录可写。普通 Linux Docker 的新文件通常归宿主 root。 |
+| `ports.target` | 业务 8080；计算 8090 | 容器内监听端口，需与进程、回调和健康检查一致。 |
+| `ports.published` | 业务 18080；RK 测试 18081；独立计算 18090 | 宿主入口端口。同机计算不发布 8090；多套实例必须避免冲突。 |
+| `ports.host_ip` | `0.0.0.0` | 所有宿主网卡；127.0.0.1 仅本机；也可填真实局域网 IP。它不控制容器内部监听。 |
+| `volumes` | `./singverse-data:/data` 等 | 左侧宿主、右侧容器。相对路径以 YAML 目录为基准；改变左侧不搬迁数据，命名卷也不会自动转换。 |
+| `read_only` / `:ro` | 原始曲库、Go 侧 token、RK 库与设备树只读 | 数据库、下载、模型和计算工作目录需要可写。 |
+| `bind.create_host_path` | 已有曲库、RK 文件设为 false | 路径不存在就失败，避免把错误的库文件路径自动建成目录。 |
+| `mem_limit` | 业务 768 MiB–2 GiB；计算 2–6 GiB | 整个容器的内存上限，与进程预算不同。宿主还要为系统和核显共享内存留余量。 |
+| `cpus` | 业务 2；计算 2 或 4 | CPU 配额，允许小数；不是固定绑核。 |
+| `shm_size` | 计算 512 MiB；RK 128 MiB | `/dev/shm` 上限，不是显存；实际占用仍消耗内存。 |
+| `devices` | DRI、KFD 或 RK 设备 | 左侧宿主真实设备、右侧容器路径；随内核和多卡布局变化。 |
+| `deploy.resources.reservations.devices` | NVIDIA，`device_ids: ["0"]` | 通过 NVIDIA Container Toolkit 提供所选 GPU，可填真实编号或 UUID。 |
+| `ulimits.memlock` | AMD soft/hard 均 -1 | 配合 ROCm 的锁页内存限制，不等于无限显存或内存。 |
+| `init` | 计算端 true | 帮助回收计算子进程。 |
+| `restart` | `unless-stopped` | 异常退出后重启，人为停止后保持停止。不能解决错误配置。 |
+| `stop_grace_period` | 业务 25 秒；计算 20 秒 | 正常停止宽限时间，超时可被强制终止。 |
+| `healthcheck` | 间隔 5 秒；超时 3 秒；宽限 30 秒；重试 6 次 | 检查业务 `/api/health` 或计算 `/health`，不执行硬件模型验收。 |
+| `logging` | `json-file`，10 MiB × 3 | 限制每个容器的日志轮转，不代替数据备份。 |
+
+## 管理端运行参数
+
+以下 25 项在管理端配置中全部声明。仅管理端模式下计算 URL 与回调为空，可稍后在后台连接独立节点。
+
+<ParameterReference group="app" />
+
+## 已有 MySQL 连接参数
+
+选择 MySQL 时增加以下 5 项。仍需持久保存 `/data` 文件和 `/secrets` 主密钥；数据库备份使用 MySQL 的一致性备份方式。
+
+<ParameterReference group="mysql" />
+
+## 计算端运行参数
+
+以下 17 项在启用计算端时全部声明。表单中的 MiB/GiB 转换为字节整数：1 MiB = 1048576 字节，1 GiB = 1073741824 字节。
+
+<ParameterReference group="compute" />
+
+## 镜像与驱动参数
+
+仅在适用镜像中声明，不能代替宿主驱动、硬件映射或模型安装。
+
+<ParameterReference group="runtime" />
+
+## 哪些不是部署环境变量
+
+WebDAV 凭据、音乐平台授权、AI 服务密钥、账号密码、模型选择、硬件试跑和缓存回收策略在管理端保存。生成器不要求把这些业务设置复制进 YAML。`IMAGE_PREFIX`、`COMPUTE_RUNTIME`、`COMPUTE_RENDER_GID` 等旧组合模板变量无需另行导出；对应结果已写为完整镜像地址、设备和服务配置。

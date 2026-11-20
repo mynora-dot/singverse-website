@@ -1,0 +1,26 @@
+---
+title: "Docker Compose 生成器"
+description: "选择服务、硬件、数据目录和资源预算，在浏览器生成完整的 docker-compose.yaml。"
+slug: "docs/compose"
+verifiedAt: "2026-11-20"
+group: "部署"
+tableOfContents: false
+---
+import ComposeBuilder from '../../components/deployment/ComposeBuilder.astro'
+
+<ComposeBuilder />
+
+## 保存后启动
+
+把文件保存为独立部署目录下的 `docker-compose.yaml`，在目标 Linux 主机执行：
+
+```sh
+docker compose -f docker-compose.yaml config --quiet
+docker compose -f docker-compose.yaml pull
+docker compose -f docker-compose.yaml up -d --no-build --wait --wait-timeout 180
+docker compose -f docker-compose.yaml ps
+```
+
+`config` 只检查配置，`healthy` 只说明服务启动。GPU/NPU、视频转码与音频模型需要按[硬件指南](/docs/hardware.html)完成真实试跑。生成器不会检查远端镜像是否存在，也不会连接你的 NAS。
+
+逐项配置说明见[部署参数手册](/docs/parameters.html)，首次安装流程见[部署与首次登录](/docs/getting-started.html)。

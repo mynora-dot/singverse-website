@@ -9,3 +9,24 @@ dist/
 !.env.example
 __pycache__/
 *.py[cod]
+
+# Built from the same deployment generator, never hand-maintained.
+/public/deploy/
+
+# Downloaded deployment configs and private local verification files
+/docker-compose*.yaml
+/docker-compose*.yml
+/compose.override.yaml
+/compose.override.yml
+/private-reports/
+/test-results/
+/playwright-report/
+*.har
+*.log
+credentials*.json
+*.pem
+*.key
+*.jks
+*.keystore
+*.token
+secrets/

@@ -1,0 +1,23 @@
+---
+import { parameterGroups } from '../../lib/deployment/parameters.mjs'
+interface Props { group: string }
+const group = parameterGroups.find(group => group.id === Astro.props.group)
+---
+<div class="parameter-list">
+  {group?.items.map(item => <section class="parameter-entry" id={(group.id === 'compute' && item.key === 'COMPUTE_AUTH_TOKEN_FILE' ? 'node-' : '') + item.key.toLowerCase().replaceAll('_', '-')}>
+    <h3><code>{item.key}</code><span>{item.label}</span></h3>
+    <dl><dt>生成器默认</dt><dd><code>{item.value}</code></dd><dt>格式 / 单位</dt><dd>{item.type}</dd></dl>
+    <p>{item.description}</p><p class="parameter-change"><strong>修改时：</strong>{item.change}</p>
+  </section>)}
+</div>
+<style>
+.parameter-list { margin-block: 1.5rem; }
+.parameter-entry { padding-block: 1.5rem; border-bottom: 1px solid var(--line); scroll-margin-top: 6rem; }
+.parameter-entry h3 { display: flex; flex-direction: column; gap: .45rem; margin: 0; font-size: 1.05rem; }
+.parameter-entry h3 code { font-size: .85rem; word-break: break-word; color: var(--sl-color-accent-high); }
+.parameter-entry dl { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: .5rem; font-size: .85rem; margin-block: 1rem; }
+.parameter-entry dt { color: var(--ink-3); }
+.parameter-entry dd { margin: 0; overflow-wrap: anywhere; }
+.parameter-entry p { font-size: .9rem; }
+.parameter-change { color: var(--ink-2); }
+</style>

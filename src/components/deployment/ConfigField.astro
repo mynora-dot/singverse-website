@@ -1,0 +1,9 @@
+---
+interface Props { name: string; label: string; value?: string | number; help: string; type?: 'text' | 'number' | 'password'; parameter?: string; step?: string; placeholder?: string }
+const { name, label, value = '', help, type = 'text', parameter, step, placeholder } = Astro.props
+---
+<div class="compose-field">
+  <label for={`config-${name}`}>{label}</label>
+  <input id={`config-${name}`} name={name} type={type} value={value} step={step} placeholder={placeholder} aria-describedby={`help-${name}`} autocomplete="off" spellcheck="false" />
+  <p id={`help-${name}`}>{help} {parameter && <a href={`/docs/parameters.html#${parameter.toLowerCase().replaceAll('_', '-')}`}>参数说明 ↗</a>}</p>
+</div>

@@ -1,0 +1,73 @@
+// Runtime names and semantics are checked against Go config.go / compute core/config.py.
+// Defaults describe the single-file generator, not native-process fallback values.
+const parameter = (key, label, value, type, description, change) => ({ key, label, value, type, description, change })
+export const appParameters = [
+  parameter('SINGVERSE_DB_DRIVER', '数据库类型', 'sqlite', 'sqlite / mysql', '决定业务数据存到 SQLite 文件还是已有 MySQL。家用单机从 SQLite 开始即可；计算节点不访问业务数据库。', '选择 mysql 后必须提供五项 MYSQL_* 参数。修改此值不会迁移原数据库，连接失败也不会回退到 SQLite。'),
+  parameter('SINGVERSE_BIND_ADDRESS', '容器监听地址', '0.0.0.0', 'IP 地址', 'Go 在容器内部监听的网卡。0.0.0.0 让 Docker 端口映射能访问服务。宿主对外监听范围由 ports 的 host_ip 决定。', '不要为了限制外部访问改为容器 127.0.0.1；应调整宿主绑定地址。'),
+  parameter('SERVER_PORT', '容器 HTTP 端口', '8080', '整数，1–65535', '管理页面、亲友页面、下载页面和 API 共用此端口。它与宿主默认 18080 是两个值。', '修改时必须同步 ports.target、健康检查以及同机计算回调。生成器固定为 8080。'),
+  parameter('SQLITE_PATH', 'SQLite 文件', '/data/singverse.db', '容器绝对文件路径', '保存账号、曲库索引、设置、收藏等业务数据。对应宿主 singverse-data 内的 singverse.db。', '只在 SQLite 模式使用。不要填 :memory: 或 file: URI；更换路径会指向另一份数据库。'),
+  parameter('SINGVERSE_AUTH_KEY_FILE', '业务加密主密钥', '/secrets/master.key', '容器绝对文件路径', '保护 MFA、WebDAV 等已保存的敏感配置。首次空库由程序创建，文件权限必须为 0600，不需要手写密钥内容。', '必须与数据库成套备份。已有密文时，缺失或更换主密钥会导致启动失败；改密码不能替代恢复密钥。'),
+  parameter('DBMATE_BIN', '迁移工具位置', '/usr/local/bin/dbmate', '容器绝对文件路径', 'Go 启动时调用此工具应用尚未执行的数据库迁移。发行镜像已内置。', '普通部署保持默认。路径错误或迁移失败会阻止主服务启动。'),
+  parameter('SINGVERSE_MIGRATIONS_DIR', '数据库迁移目录', '/opt/singverse/database/migrations', '容器绝对目录', '发行镜像内按数据库类型提供的迁移脚本，必须与 Go 版本配套。', '不要用旧版本宿主目录覆盖。数据库升级后回退镜像可能需要恢复对应备份。'),
+  parameter('COMPUTE_NODE_URL', '自动连接的计算地址', 'http://singverse-compute:8090', 'HTTP(S) URL；可为空', '同机部署通过 Compose 服务名找到计算端；浏览器、手机和电视不使用这个内部地址。仅管理端部署时留空。', '跨主机地址需能从 Go 容器访问，并配置匹配的节点认证和回调。后台手动连接/禁用设置会覆盖自动连接。'),
+  parameter('COMPUTE_AUTH_TOKEN_FILE', '计算认证文件', '/run/singverse-compute/token', '容器绝对文件路径', 'Go 从此文件读取计算端的共享 token。同机两个容器挂载相同宿主目录，Go 侧只读，计算端首次生成。', '不要将 token 内容写进 YAML。独立节点不能仅靠两个同名目录共享认证，需要在后台配对或配置连接密钥。'),
+  parameter('SINGVERSE_COMPUTE_AUTO_CALLBACK_ORIGIN', '自动连接的回调入口', 'http://singverse-go-backend:8080', 'HTTP(S) origin；可为空', '自动连接模式下告诉计算节点如何访问 Go。节点用授权回调读取媒体、传回结果，因此连接是双向的。', '同机使用内部服务名；独立机器必须能访问实际 NAS 地址。不要填计算容器自己的 localhost。'),
+  parameter('SINGVERSE_CALLBACK_ORIGIN', '通用计算回调入口', 'http://singverse-go-backend:8080', 'HTTP(S) origin；可为空', '提供计算任务使用的业务回调来源。同机生成器将它与自动连接回调保持一致。', '跨主机时设置节点可达的业务根地址，后台连接中保存的回调也要核对。无需把原片目录挂给计算端。'),
+  parameter('SINGVERSE_PUBLIC_ORIGIN', '外部 HTTPS 来源', '空字符串', 'https://域名[:端口]', '启用 HTTPS 反向代理时声明浏览器实际访问的来源，用于来源校验和安全 Cookie。局域网直连 HTTP 留空。', '不能带路径、查询参数、片段或用户名密码，不能填 http://。还要设置真实可信代理并保留 Host。'),
+  parameter('SINGVERSE_TRUSTED_PROXIES', '可信反向代理', '空字符串', 'IP / CIDR，逗号分隔', '仅这些代理转发的地址和协议头会被信任。直接访问时留空。这里填写 Go 实际看到的代理源地址。', '不要填写 0.0.0.0/0 或 ::/0。Docker 代理地址与浏览器地址可能不同；错误设置会影响登录和来源校验。'),
+  parameter('WEBDAV_METADATA_PATH', 'WebDAV 元数据目录', '/data/metadata/webdav', '容器绝对目录', '保存 WebDAV 来源使用的本地元数据。它不是远端 WebDAV URL，也不是账号密码配置入口。', '在管理端添加 WebDAV 地址与凭据；此路径应一直落在 /data 的持久绑定中。'),
+  parameter('METADATA_CACHE_PATH', '封面缓存目录', '/data/metadata/covers', '容器绝对目录', '保存歌曲、歌手等元数据使用的本地封面缓存，避免重复获取。', '与业务数据一起保存。改路径不会自动搬迁已有封面文件。'),
+  parameter('TRANSCODE_VERSION_PATH', '业务转码结果目录', '/data/transcoding', '容器绝对目录', 'Go 保存受控的兼容播放产物及相关文件。计算端有独立的临时目录，两者用途不同。', '更改前停机并迁移关联文件；不要挂载到只读原始曲库。'),
+  parameter('SINGVERSE_SONG_CACHE_PATH', '播放缓存目录', '/data/transcoding/cache', '容器绝对目录', '存储 Go 侧管理的原片缓存和兼容播放结果，供存储与缓存页面统一查看。', '后台缓存策略可以清理其管理的条目；不要把原始歌曲或其他程序的数据混放在这里。'),
+  parameter('SINGVERSE_SONG_CACHE_BYTES', '播放缓存初始容量', '21474836480；RK3566 为 4294967296', '字节；整数 ≥ 0', '20 GiB / 4 GiB 是生成器初始预算。1 GiB = 1073741824 字节，预算不是磁盘预分配，也不包括全部模型和原片。', '后台保存过的缓存设置优先；未手动配置时程序可能按剩余空间调整。改变环境变量不保证覆盖已保存设置。'),
+  parameter('SINGVERSE_SONG_CACHE_MINIMUM_FREE_BYTES', '播放磁盘最低余量', '2147483648', '字节；整数 ≥ 0', '要求缓存所在磁盘保留 2 GiB 可用空间，为系统和其他写入留出余量。', '磁盘空间不足时先查看原片、模型、下载和衍生文件占用；单纯调大缓存预算不会增加磁盘容量。'),
+  parameter('AUDIO_DERIVED_PATH', '音频衍生文件目录', '/data/audio-roles', '容器绝对目录', '保存识别、分离等业务关联的音频结果，生成伴奏不改写原媒体。', '应随业务数据持久保存；改变路径不会自动搬迁已生成文件。'),
+  parameter('SINGVERSE_CLIENT_RELEASE_DIRECTORY', '客户端发行目录', '/opt/singverse/releases', '容器绝对目录', '读取镜像随包提供的 mobile/tv APK 与发行清单，供 /downloads/ 页面展示和下载。', '普通部署无需挂载。更新官网不会更新这些 APK；需要升级含新包的业务镜像。'),
+  parameter('SINGVERSE_TV_RELEASE_DIRECTORY', '单独覆盖 TV 发行目录', '空字符串', '容器绝对目录；可为空', '为空时使用统一客户端目录中的 TV 包；非空时使用指定目录覆盖电视发行内容。', '自定义目录必须有真实挂载及有效清单、APK。缺包不会自动从官网补下载。'),
+  parameter('SINGVERSE_TV_DISCOVERY_ADDRESS', '原生 mDNS 广播地址', '空字符串', '客户端可达的 IP；可为空', '原生 Go 可配置要广播的业务地址。生成器使用桥接网络，默认不在容器内发布 mDNS。', 'Docker 端口映射不等于局域网发现。优先由宿主 Avahi 发布服务，或让客户端手动填写地址。'),
+  parameter('SINGVERSE_TV_DISCOVERY_PORT', 'mDNS 宣告端口', '18080；RK3566 测试为 18081', '整数，1–65535', '客户端通过发现记录连接的业务入口端口，应与实际宿主端口一致。', '发现地址为空时单改此值不会启用广播；生成器会与业务发布端口同步。'),
+  parameter('SINGVERSE_DIAGNOSTICS_ADDRESS', '诊断监听', '空字符串', '回环 IP:端口；可为空', '可选的内部诊断入口。普通部署关闭，不需要额外发布诊断端口。', '启用时仅接受明确回环地址，例如 127.0.0.1:6060。它不是管理页面端口。'),
+]
+export const mysqlParameters = [
+  parameter('MYSQL_HOST', 'MySQL 主机', '必须填写', '主机名或 IP', '已有 MySQL 从业务容器能访问的地址。生成器不会额外创建 MySQL 服务。', '容器 localhost 指自身；数据库在宿主时应填写可达地址。先建立数据库、账号和访问授权。'),
+  parameter('MYSQL_PORT', 'MySQL 端口', '3306', '整数，1–65535', 'MySQL 服务实际监听的端口，与业务 HTTP 端口无关。', '只在 mysql 模式生效；主机、防火墙和数据库监听需要配合。'),
+  parameter('MYSQL_DATABASE', '数据库名', 'singverse', '非空字符串', 'Go 在此数据库应用迁移并存储业务数据。', '切换名称不会搬迁已有数据；首次连接前创建专用数据库。'),
+  parameter('MYSQL_USER', '数据库账号', 'singverse', '非空字符串', 'Go 用于业务访问与启动迁移的专用账号，需要必要的表结构及读写权限。', '不是管理员网页登录名，也不应使用数据库 root 账号。'),
+  parameter('MYSQL_PASSWORD', '数据库密码', '必须填写；无公共默认密码', '非空字符串', '已有 MySQL 专用账号的真实密码。单文件配置将密码保存在 YAML 中，请控制该文件的访问权限。', '生成器只在当前浏览器内存处理；下载文件不会上传。含 $ 的内容自动转义为 $$，由 Compose 还原为原密码。'),
+]
+export const computeParameters = [
+  parameter('COMPUTE_AUTH_TOKEN_FILE', '节点认证文件', '/run/singverse-compute/token', '容器绝对文件路径', '节点首次启动生成的内部调用凭据，保存在 singverse-compute-auth 目录。', '与 Go 的文件路径及共享目录对应。保留已有 token，不能把两个独立机器的同名路径当作共享。'),
+  parameter('COMPUTE_LAN_PAIRING_ENABLED', '局域网配对', '同机 false；独立节点 true', 'true / false', '允许独立计算节点接受局域网配对流程。同机已使用共享 token，不需要额外开启。', '独立节点还需发布计算端口，并在管理端配置节点可达的业务回调。'),
+  parameter('COMPUTE_TRANSCODE_ROOT', '计算工作目录', '/var/cache/singverse-transcode', '容器绝对目录', '保存计算临时文件，同时保存硬件选择、模型选择和试跑资格。', '这个目录需要持久化和备份，不能当成可随意删除的纯临时缓存。'),
+  parameter('COMPUTE_FFMPEG', 'FFmpeg 可执行文件', '/usr/lib/jellyfin-ffmpeg/ffmpeg', '容器可执行文件路径', '计算节点执行探测后的解码、编码、转码和音频处理时使用的 FFmpeg。', '镜像已内置对应版本。不要替换成宿主上仅列出了编码器但缺少运行库的文件。'),
+  parameter('COMPUTE_FFPROBE', 'FFprobe 可执行文件', '/usr/lib/jellyfin-ffmpeg/ffprobe', '容器可执行文件路径', '读取媒体容器、音视频流、编码和时长，供后续处理选择路径。', '与镜像中的 FFmpeg 配套。路径错误会影响媒体探测及模型任务。'),
+  parameter('COMPUTE_HARDWARE_BACKEND', '视频硬件后端', 'A3000 nvenc；780M vaapi；Intel qsv；RK3566 auto', 'auto / nvenc / vaapi / qsv / rkmpp 等', '只选择视频转码策略，不能启用音频 AI 加速。RK3566 默认 auto，映射并验证 MPP 后才可使用 rkmpp。', '后台保存的硬件选择优先于部署默认；改环境后在后台选择跟随部署并重新试跑。'),
+  parameter('COMPUTE_HARDWARE_DEVICE', '视频 render 设备', 'Intel/AMD：/dev/dri/renderD128；其余为空', '容器设备路径；可为空', 'VAAPI/QSV 使用的 Linux DRM render 节点。多显卡机器需要核对节点所属厂商和驱动。', '必须同时映射真实设备；NVIDIA 由 GPU reservation 选卡，RKNN NPU 不由此参数选择。'),
+  parameter('COMPUTE_PROCESS_MEMORY_BYTES', '媒体进程内存预算', '1073741824；RK3566 为 536870912', '字节；至少 67108864', '限制媒体处理子进程的内存使用，分别为 1 GiB / 512 MiB。', '它不是整个容器的限制；应与音频预算、并发和容器 mem_limit 一起调整。'),
+  parameter('COMPUTE_TRANSCODE_CONCURRENCY', '视频转码并发', '1', '整数，1–16', '限制同时执行的转码数量。单卡、小主机和共享内存核显从 1 开始。', '并发越高，CPU、内存、显存和磁盘压力越大。修改后重建容器，再用真实素材验证。'),
+  parameter('COMPUTE_CACHE_BYTES', '计算缓存预算', '10737418240；Intel 为 5368709120；RK3566 为 2147483648', '字节；整数 > 0', '计算工作目录中受管理缓存的容量预算，默认 10 GiB，Intel 为 5 GiB，RK3566 为 2 GiB。', '它与 Go 播放缓存分别配置；模型目录及持久设置不会因此获得无限空间。'),
+  parameter('COMPUTE_MINIMUM_FREE_BYTES', '计算磁盘最低余量', '2147483648', '字节；整数 ≥ 0', '计算所在磁盘至少保留 2 GiB 可用空间。空间不足会影响新任务准入。', '与 Go 共用磁盘时，两份预算不会自动合并成宿主整体磁盘配额。'),
+  parameter('COMPUTE_AUDIO_MODEL_REPO', '基准音频模型目录', '/var/lib/singverse-models/htdemucs', '容器绝对目录', '指向 htdemucs 模型目录；其他固定模型放在其父目录下各自的目录。模型权重不随镜像自动提供。', '通过后台下载/导入支持的模型，RKNN 转换模型须按硬件说明手工放置。改变路径后需重新检测。'),
+  parameter('COMPUTE_AUDIO_MEMORY_BYTES', '音频进程内存预算', '4294967296；Intel 为 2147483648；RK3566 为 1342177280', '字节；至少 536870912', '音频处理子进程的系统内存预算，默认 4 GiB，Intel 为 2 GiB，RK3566 为 1280 MiB。不是 CUDA 显存或核显 UMA 的配置。', '过低可能在模型加载或推理阶段失败。容器还需留出媒体进程和服务本身的余量。'),
+  parameter('COMPUTE_AUDIO_THREADS', '音频 CPU 线程数', '4；Intel/RK3566 为 2', '整数，0–8', '控制音频处理中使用的 CPU 线程；0 表示程序根据有效核心与配额自动选择。', '核显/NPU 推理仍有 CPU 前后处理。线程数增加不一定更快，需结合 cpus 限额测试。'),
+  parameter('COMPUTE_AUDIO_WORKER_IDLE_SECONDS', '音频进程空闲回收', '60', '秒；整数，0–3600', '支持驻留的模型进程空闲后释放，减少重复加载并回收资源。0 对旧模型任务禁用驻留；MDX 引擎至少保留 1 秒。', '只影响支持该生命周期的路径。取消、失败、内存超限或播放抢占仍可提前释放进程。'),
+  parameter('COMPUTE_AUDIO_CPU_PYTHON', '独立 CPU 解释器', '/opt/singverse-audio-cpu/bin/python', '容器绝对可执行路径', '用于独立 CPU 试跑和自动降级，不依赖 GPU 运行库可用。四种计算镜像均包含它。', '不要改成 GPU 专用解释器来冒充 CPU 降级环境；模型仍需安装并通过试跑。'),
+  parameter('COMPUTE_AUDIO_ACCELERATOR_PYTHON', '加速解释器', 'CUDA：/opt/singverse-audio-accelerator/bin/python；其他：/usr/local/bin/python', '容器绝对可执行路径', 'MDX 等分离任务加载加速运行环境的 Python。CUDA 使用独立 ONNX 环境，其余变体按当前 Dockerfile 使用系统 Python。', '不能把 CUDA 的虚拟环境路径复制给 ROCm/RKNN。这个参数不会安装缺失的 MIGraphX 等 provider。'),
+]
+export const runtimeParameters = [
+  parameter('TZ', '时区', 'Asia/Shanghai', 'IANA 时区名称', '供容器内支持时区配置的运行库使用。客户端展示时间和系统时钟同步仍由各自环境负责。', '改时区不会修复宿主时间漂移，MFA 动态码要求实际时钟准确。'),
+  parameter('SINGVERSE_COMPUTE_VARIANT', '计算镜像变体', 'cuda / rocm / openvino / rknn', '与镜像标签匹配', '标识镜像内已经安装的运行库。生成器根据硬件填写并选择对应后缀镜像。', '仅改变量不能把 CPU、CUDA 或 ROCm 镜像转换为另一种运行库。'),
+  parameter('NVIDIA_DRIVER_CAPABILITIES', 'NVIDIA 驱动能力', 'compute,video,utility', '逗号分隔；仅 NVIDIA', '请求 CUDA 计算、视频编解码及诊断所需的驱动能力。', '宿主必须安装兼容驱动与 NVIDIA Container Toolkit，YAML 无法代替宿主安装。'),
+  parameter('CUDA_VISIBLE_DEVICES', '容器内 CUDA 编号', '0', '设备序号；仅 NVIDIA', '生成器只通过 reservation 提供选定的一张 GPU，因此它在容器内的逻辑编号为 0。', '选宿主 GPU 应修改生成器的 GPU 编号或 UUID，不是把此值直接改成宿主编号。'),
+  parameter('HIP_VISIBLE_DEVICES', 'ROCm 可见 GPU', '0', 'ROCm 枚举序号；仅 AMD', '选择 ROCm 音频推理使用的 AMD GPU，默认第一个设备。', '其序号与 /dev/dri/renderD* 的编号不同，多卡必须分别检查。'),
+  parameter('LIBVA_DRIVER_NAME', 'VAAPI 驱动', 'radeonsi；仅 AMD', '驱动名称', '让 AMD 视频路径使用镜像中的 Mesa radeonsi 驱动。', '不能用它选择 ROCm 模型，也不能替代 /dev/dri 设备映射。Intel 使用自身驱动探测。'),
+  parameter('HOME', 'ROCm 用户缓存目录', '/tmp；仅 AMD', '容器绝对目录', '遵循 ROCm 镜像约定，为 SDK 运行提供可写的用户目录。此处是容器配置，不修改宿主 HOME。', '运行缓存不是业务备份内容；模型和数据仍保存在专门的绑定目录。'),
+  parameter('USER', 'ROCm SDK 用户名', 'singverse；仅 AMD', '字符串', '部分 SDK 用它读取用户名，沿用镜像自身的约定。', '它不决定 Linux 进程权限；实际身份由 Compose 的 user: "0:0" 指定。'),
+  parameter('LOGNAME', 'ROCm SDK 登录名', 'singverse；仅 AMD', '字符串', '与 USER 一起为 SDK 提供稳定的用户名信息。', '与管理员网页登录账号无关，无需填成 NAS 用户名。'),
+]
+export const parameterGroups = [
+  { id: 'app', title: '管理端运行参数', items: appParameters },
+  { id: 'mysql', title: '已有 MySQL 连接参数', items: mysqlParameters },
+  { id: 'compute', title: '计算端运行参数', items: computeParameters },
+  { id: 'runtime', title: '镜像与驱动参数', items: runtimeParameters },
+]

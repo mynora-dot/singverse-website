@@ -1,225 +1,99 @@
 ---
 title: "部署与首次登录"
-description: "先选发行镜像、源码联调或原生运行，再让手机和电视访问同一 NAS。部署完成后，用少量真实歌曲走通从扫描到播放的完整流程。"
+description: "直接使用 Docker Hub 镜像，一份 YAML 完成部署，不需要 .env、命名卷或手动 chown。"
 slug: "docs/getting-started"
-verifiedAt: "2026-11-15"
-group: "入门"
+verifiedAt: "2026-11-20"
+group: "部署"
 ---
 
-## 先选对部署方式 {#choose}
+## 准备主机 {#requirements}
 
-| 方式 | 适合谁 | 你需要准备 |
-| --- | --- | --- |
-| 已发布镜像 | 长期使用，已有可用发行版 | Docker / Compose、镜像版本、持久卷与网络 |
-| 正式源码构建 | 需要自行组装发行镜像 | Go 仓库及固定前端发行包、有效客户端发行包、签名校验工具 |
-| 本地源码联调 | 同时修改多个仓库 | 相邻前端与 compute 源码、绝对路径、独立本地运行数据 |
-| 原生 Go | 自行管理进程、数据库与反向代理 | 仓库工具链、完整前端产物、显式环境变量 |
+准备可运行 Docker Engine 和 Compose 的 Linux 主机。管理端支持 AMD64、ARM64；计算镜像按硬件选择。宿主必须先提供对应驱动和设备，容器不能代替安装 GPU/NPU 驱动。
 
-## 环境要求 {#requirements}
+| 预设 | 架构 | 计算镜像后缀 | 默认业务端口 |
+| --- | --- | --- | --- |
+| NVIDIA A3000 | AMD64 | `-cuda` | 18080 |
+| AMD Radeon 780M | AMD64 | `-rocm` | 18080 |
+| Intel N100 / 核显 | AMD64 | `-openvino` | 18080 |
+| RK3566 测试 | ARM64 | `-rknn` | 18081 |
 
-- Docker 需要 Engine 与 Compose；本地源码联调还需要支持 BuildKit 命名上下文。CPU 架构、磁盘和内存按所选镜像、曲库与计算能力核对。
-- 默认数据库为 SQLite，可显式选择 MySQL；MySQL 失败不会静默回退。
-- 计算节点可选，用于媒体探测、转码、音轨分析和伴奏分离。
-- 手机和电视需要与 NAS 处于同一可互访的私有网络，或能访问你配置的域名。
+硬件前置检查、内存预算和验证步骤见[硬件指南](/docs/hardware.html)。只部署管理端时可不映射设备，之后再添加计算服务。
 
-| 部署方式 | 默认管理入口 | 说明 |
-| --- | --- | --- |
-| Docker | `http://127.0.0.1:18080/admin/` | HTTP 端口由 `SINGVERSE_HTTP_PORT` 控制，默认 18080 |
-| 原生 Go | `http://127.0.0.1:8080/` | 默认只监听回环，不自动加载 `.env` |
+## 生成单文件配置 {#docker-release}
 
-## 正式发行包部署 {#docker-release}
+打开 [Compose 生成器](/docs/compose.html)，依次选择服务组合、硬件、镜像版本、入口、数据目录。默认 SQLite，无需额外数据库。需要 MySQL 时选择“连接已有 MySQL”并填写真实连接参数。
 
-在 `singverse-go-backend` 仓库根目录执行。源码构建会先准备并校验手机和电视发行包，因此打包机需要 Android SDK 的 `apksigner` 和 `aapt`。如果项目已经发布镜像，可以直接拉取。
+下载文件为 `docker-compose.yaml`，放进固定部署目录。所有运行参数直接写在文件里；默认使用 `./singverse-data:/data` 这样的目录绑定，以及容器 `user: "0:0"`。不要求宿主 UID 为 10001，也没有权限初始化容器。
 
-```sh
-cp -n .env.example .env
-# 按部署需要修改 .env，已有 .env 不会被覆盖
-make docker-build docker-up
+宿主新文件通常归 root。若需要普通用户直接读写所有文件，需要另外按实际 UID/GID 准备目录，不能靠删除 `user` 达到这一点：删除后仍会沿用镜像默认用户。
 
-# 或使用已发布镜像
-make docker-pull docker-image-up
+## 直接下载固定模板 {#templates}
 
-# 停止并保留命名卷
-make docker-down
-```
+不使用 JavaScript 或只需要默认配置，可以保存以下文件并改名为 `docker-compose.yaml`。这些文件与生成器使用同一配置逻辑生成。
 
-:::caution
-默认只启动 Go。计算节点需要通过 Compose profile 显式启用，或在管理端配置独立节点。首次正式发布需按手机、TV、前端、Go 的顺序准备组件。
-:::
+- [A3000 默认配置](/deploy/a3000.yaml)
+- [780M 默认配置](/deploy/amd780m.yaml)
+- [Intel 核显默认配置](/deploy/intel.yaml)
+- [RK3566 测试配置](/deploy/rk3566.yaml)
+- [仅管理端 AMD64](/deploy/app-amd64.yaml)
+- [仅管理端 ARM64](/deploy/app-arm64.yaml)
 
-## 从 GHCR 或 Docker Hub拉取镜像 {#image-registry}
+## 确认镜像与版本 {#image-registry}
 
-发布工作流将同一批镜像推送到 GitHub Container Registry（GHCR）和 Docker Hub。实际项目空间由发布者的 GitHub Actions Variables 决定；部署前取得这次发布的仓库地址与版本，再设置 `IMAGE_PREFIX`。以下均为地址格式，尖括号内容需替换。
+默认主镜像为 `docker.io/mynora/singverse:latest`，计算镜像为 `docker.io/mynora/singverse-compute:latest-运行库`。如果发布到其他空间，在生成器改“镜像仓库 / 空间”。私有镜像先在主机执行 `docker login docker.io`，不要把登录凭据写进配置。
 
-| 镜像仓库 | IMAGE_PREFIX 格式 | 空间来自发布参数 |
-| --- | --- | --- |
-| GitHub GHCR | `ghcr.io/<用户或组织>` | `GHCR_NAMESPACE` |
-| Docker Hub | `docker.io/<用户或组织>` | `DOCKERHUB_NAMESPACE` |
+Go 与 compute 独立发版，可以使用不同版本。正式运行建议分别选择实际发布的固定版本；Release 的 `v1.2.3` 对应镜像标签 `1.2.3`。`latest` 会随发布变化，文档不会代替拉取检查远端标签。ARM64 管理端不能与仅有 AMD64 的 CUDA/ROCm/OpenVINO 变体混用硬件透传。
 
-前缀不含 `https://`、镜像名、版本标签或末尾斜杠。Go 镜像为 `<IMAGE_PREFIX>/singverse:<版本>`，计算镜像为 `<IMAGE_PREFIX>/singverse-compute:<版本>-<运行库>`。GitHub Release 使用 `v1.2.3` 形式，镜像版本使用 `1.2.3`，不带开头的 `v`。
+## 启动 {#start}
+
+在 YAML 所在目录执行：
 
 ```sh
-# .env：替换为空间中实际已发布的地址和版本；这里的版本仅作示例
-IMAGE_PREFIX=ghcr.io/your-org
-SINGVERSE_VERSION=1.2.3
-COMPUTE_VERSION=1.2.3
-COMPUTE_RUNTIME=cuda
-
-# 保存 .env 后，在 Go 仓库根目录拉取并启动
-make docker-pull docker-image-up
+docker compose -f docker-compose.yaml config --quiet
+docker compose -f docker-compose.yaml pull
+docker compose -f docker-compose.yaml up -d --no-build --wait --wait-timeout 180
+docker compose -f docker-compose.yaml ps
 ```
 
-主服务与计算节点独立发版，`SINGVERSE_VERSION` 和 `COMPUTE_VERSION` 不必相同。同一 Compose 组合共用一个 `IMAGE_PREFIX`；启用计算节点时，该空间必须同时有目标版本的两个镜像。私有仓库先用有拉取权限的账号执行 `docker login <仓库域名>`。
-
-镜像命名空间决定从哪里拉取；Compose 项目名决定本机容器与命名卷归属。切换镜像源时保留既有项目名（默认 `singverse-go-app`）和数据卷。发布者的参数与权限配置见[双仓库镜像发布](/docs/operations.html#image-publishing)。
-
-## 本地源码联调 {#docker-local}
-
-适合开发者从相邻仓库源码构建前端、Go 和计算节点。先填写前端与 compute 仓库的绝对路径。
+`config` 检查格式；`pull` 检查镜像是否能获取；`up --wait` 等待服务健康。失败时查看日志，不用重复删除数据目录来排障：
 
 ```sh
-cp -n .env.local.example .env.local
-# 编辑 .env.local：
-# SINGVERSE_FRONTEND_PROJECT=/absolute/path/to/singverse-frontend
-# SINGVERSE_COMPUTE_PROJECT=/absolute/path/to/singverse-compute
-make docker-local-up
-make docker-local-status
-make docker-local-logs
-
-# 停止服务，保留本地数据
-make docker-local-down
+docker compose -f docker-compose.yaml logs --tail=100 singverse-go-backend
+docker compose -f docker-compose.yaml logs --tail=100 singverse-compute
 ```
 
-运行数据位于仓库的 `data/docker/`，包括数据库、主密钥、节点认证、模型、媒体和下载目录。本地联调会构建并启动 Go 与 compute，正式发行组合默认只启动 Go；二者不要混用数据位置。
+仅管理端配置不包含第二个服务。计算端失败时管理页面仍可启动，兼容播放和模型任务则需要先排除计算故障。
 
-## 让源码联调也能分发 APK {#local-releases}
+## 首次登录 {#first-login}
 
-本地联调不默认依赖已发布客户端。若下载页提示缺包，先在各 Android 仓库生成有效的 APK、`release.json` 和 `SHA256SUMS`，再在 Go 仓库执行：
+打开 `http://主机局域网IP:18080/admin/`；RK 测试默认用 18081。新数据库的初始账号密码为 `admin/admin`，已有数据库保持原账号。登录后到“设置 → 账号与安全”修改密码，按需启用 TOTP 二次验证。
 
-```sh
-make docker-local-releases \
-  MOBILE_RELEASE_DIR=/absolute/path/to/mobile/build/mobile-release \
-  TV_RELEASE_DIR=/absolute/path/to/tv/app/build/tv-release
-make docker-local-up
-```
+同机计算在“设置 → 计算服务”选择自动连接。计算端自动创建 token，Go 从同一个绑定目录只读获取。已有数据库保存的手动连接或禁用状态可能覆盖自动配置，需要在页面检查。
 
-准备命令校验真实签名、包名、版本、ABI、最低系统和摘要；需要可用的 `apksigner` 与 `aapt`。完成后重新构建组合，安装包才进入当前 NAS 下载页。临时 Debug 签名不能覆盖已安装的正式包。
+## 手机和电视如何访问 {#lan}
 
-## 原生运行 {#native}
+默认 `ports.host_ip` 为 `0.0.0.0`，允许通过宿主实际地址访问。手机和电视填写 `http://NAS局域网IP:端口`，不要填写 `0.0.0.0`、`localhost` 或 `singverse-go-backend`。后两种地址不代表另一台设备上的 NAS。
 
-原生 Go 适合已经准备好工具链和前端 dist 的环境。生产原生运行默认监听 `127.0.0.1:8080`，不会自动加载 `.env`，需要显式导出环境变量。
+打开同一根地址的 `/downloads/` 安装 APK。若选择 `127.0.0.1` 监听，其他设备无法直连；需要改绑定地址或提供可达的反向代理。HTTPS 的来源与代理配置见[参数手册](/docs/parameters.html#singverse-public-origin)。
 
-```sh
-make go-tools-setup dbmate-setup
-make go-backend-build
-make go-backend-run
-```
+## 加入本地曲库或 WebDAV {#media-mount}
 
-首次拆分尚未发布前端时，可显式传入完整前端 dist：
+默认把文件旁的 `singverse-media` 只读挂到 `/media`。已有曲库可在生成器填写真实宿主目录，必须已经存在；管理端添加来源时填写容器内 `/media`，不是宿主 `/volume1/...` 路径。
 
-```sh
-make go-backend-build FRONTEND_DIST=/absolute/path/to/frontend/dist
-```
+WebDAV 地址、账号和密码在“加歌 → 歌曲来源”填写，无需把远端地址写成 Docker 挂载。先测试连接和小范围扫描，参见[曲库指南](/docs/library.html)。
 
-## 首次登录与改密 {#first-login}
+## 自动发现与手动连接 {#discovery}
 
-1. 打开管理入口 `/` 或 `/admin/`。
-2. 使用首次账号 `admin` / `admin` 登录。
-3. 登录后立即修改密码，并按需配置 TOTP 二次验证。
-4. 在“设置 → 账号与安全”管理会话和恢复方式。
-
-:::caution
-不要把初始密码用于长期运行。忘记密码时，需要在部署主机生成 15 分钟一次性重置码；重置会撤销所有会话并保留 MFA。
-:::
-
-## 让手机和电视访问 {#lan}
-
-Docker 默认只绑定 `127.0.0.1`，其他设备无法访问。局域网使用时，把 `.env` 或 `.env.local` 中的 `SINGVERSE_HTTP_BIND` 改为本机当前局域网 IP，再重新部署。
-
-```sh
-# .env 或 .env.local
-SINGVERSE_HTTP_BIND=192.168.1.100
-SINGVERSE_HTTP_PORT=18080
-```
-
-然后在手机或电视浏览器打开 `http://192.168.1.100:18080/downloads/`。二维码会编码当前 NAS 地址，因此请始终用其他设备可达的 IP 或域名打开下载页。机器切换网络后，需要同步更新绑定 IP。
-
-## 挂载歌曲目录 {#media-mount}
-
-Docker 中的本地目录指容器内路径。宿主 NAS 的歌曲目录必须先只读挂载，管理端才能选择。默认 Compose 不挂载任意宿主目录。
-
-```sh
-# compose.media.yaml（本地文件，不要提交真实路径）
-services:
-  singverse-go-backend:
-    volumes:
-      - /your/nas/karaoke:/media/karaoke:ro
-```
-
-```sh
-docker compose --project-directory . \
-  -f infra/docker/compose/compose.yaml \
-  -f compose.media.yaml up -d --build --wait
-```
-
-随后在“加歌 → 歌曲来源”添加本地目录，填写 `/media/karaoke`。WebDAV-only 部署不需要挂载本地媒体目录。
-
-## 局域网发现 {#discovery}
-
-手机和电视查找 `_singverse._tcp` mDNS 服务。Docker 端口映射只提供 HTTP 入口，不会自动发布发现记录。
-
-### macOS Docker Desktop
-
-```sh
-make lan-discovery
-# 自定义容器名
-make lan-discovery DISCOVERY_CONTAINER=<Go 容器名>
-```
-
-命令需要保持运行，Ctrl-C 停止，Mac 重启后重新运行。它会验证容器实际发布的 HTTP 入口后再广播。
-
-### Linux NAS
+端口映射不自动发布 `_singverse._tcp` mDNS。Linux 宿主使用已有 Avahi 服务时可发布业务端口：
 
 ```sh
 avahi-publish-service "SingVerse NAS" _singverse._tcp 18080 api=1 scheme=http
 ```
 
-保持进程运行，或使用宿主机已有的 Avahi 服务配置。原生 Go 可显式设置 `SINGVERSE_TV_DISCOVERY_ADDRESS` 和 `SINGVERSE_TV_DISCOVERY_PORT`。没有发布 mDNS 时，手动填写地址始终可用。
+使用实际业务端口并保持发布进程运行。mDNS 无法跨某些 VLAN 或访客 Wi-Fi，手动填写可达地址也能使用。
 
-## 安全与备份 {#security}
+## 已有部署与源码用户 {#local-releases}
 
-- 局域网 HTTP 可用于私有网络；跨网或公网访问建议配置 HTTPS 反向代理，并正确设置 `SINGVERSE_PUBLIC_ORIGIN` 与可信代理。
-- 数据库、主密钥和节点认证文件必须配套备份。主密钥缺失或不匹配会导致受保护凭据无法恢复。
-- 停止服务后再备份数据卷或 `data/docker/`，不要只备份数据库而遗漏主密钥。
-- 原始媒体保持只读；备份策略由你的 NAS 负责。
+本页是预构建镜像路线。仅下载网站或修改网站文件不会产生新的业务镜像、前端或 APK。源码构建、本地联调与原生运行另见[开发与发行](/docs/development.html)。
 
-:::note
-更完整的备份、升级和旧部署切换说明见后端仓库 `infra/docker/OPERATIONS.md`。本页只覆盖首次部署所需的最小路径。
-:::
-
-## 地址与端口速查 {#ports}
-
-| 地址 / 配置 | 含义 | 常见误区 |
-| --- | --- | --- |
-| `127.0.0.1:18080` | Docker 默认宿主业务入口 | 只允许部署主机本身访问 |
-| `NAS-LAN-IP:18080` | 手机、电视和亲友实际访问入口 | 需设置绑定 IP、防火墙与路由 |
-| `127.0.0.1:8080` | 原生 Go 默认入口 | 原生不自动加载 .env |
-| `singverse-compute:8090` | 同一 Compose 网络内的计算服务 | 不是手机或浏览器连接地址 |
-| `127.0.0.1:18090` | 默认宿主侧计算节点检查入口 | 健康不代表模型与双向回源已通过 |
-| `_singverse._tcp` | 手机与电视寻找 NAS 的发现记录 | 端口映射不自动发布 mDNS |
-
-## 部署后完成一次小范围验收 {#first-library}
-
-1. 管理端能登录，已经修改初始密码，账号与时间状态正常。
-2. 从另一台设备打开下载页，二维码不是 localhost，安装包按准备情况真实显示。
-3. 添加一个小目录或 WebDAV 子目录，保存并扫描，确认文件数与歌曲数。
-4. 核对一首歌的资料和原伴，先在目标客户端直放。
-5. 需要转码时测试计算节点及回源，再试播放兼容素材。
-6. 电视邀请亲友，测试点歌、队列与暂停，确认实际执行。
-7. 确认所有数据落在预期位置，安排数据库、主密钥和持久附件配套备份。
-
-找不到 NAS 先手动输入地址，发现只是便利入口。可用前不要扩大到整库、批量生成或大量下载，以免把网络、挂载与整理问题混在一起。
-
-## 下一步配置 {#next}
-
-[添加歌曲来源](/docs/library.html) → [设置文件名识别](/docs/filename.html) → [核对资料](/docs/metadata.html) → [连接电视](/docs/tv.html)。长期维护参考 [备份、升级与维护](/docs/operations.html)；登录恢复参考 [账号安全](/docs/security.html)。
+旧命名卷不会自动搬进新绑定目录。替换前先停旧服务并备份，成套迁移数据、主密钥、节点 token、模型与设置；不要让两套项目同时写同一 SQLite。具体步骤见[备份与升级](/docs/operations.html)。

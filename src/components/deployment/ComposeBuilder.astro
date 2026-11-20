@@ -1,0 +1,182 @@
+---
+import Field from './ConfigField.astro'
+import { defaults, presets, generate, notes } from '../../lib/deployment/compose.mjs'
+import '../../styles/compose.css'
+const d = defaults()
+const resources = [
+  ['appMemory', '管理端内存上限（MiB）', '覆盖管理页面、数据库和业务进程。', 'app'],
+  ['appCpus', '管理端 CPU 配额', '2 表示最多使用相当于两个 CPU 核心的算力。', 'app'],
+  ['songCache', '播放缓存预算（GiB）', 'Go 侧初始预算；后台保存的缓存策略优先。', 'app'],
+  ['computeMemory', '计算端内存上限（MiB）', '需覆盖进程预算，并给计算服务留出余量。', 'compute'],
+  ['computeCpus', '计算端 CPU 配额', 'GPU 推理也有 CPU 前后处理。', 'compute'],
+  ['processMemory', '媒体进程预算（MiB）', '每个媒体处理子进程的预算。', 'compute'],
+  ['audioMemory', '音频进程预算（MiB）', '系统内存预算，与显存大小无关。', 'compute'],
+  ['computeCache', '计算缓存预算（GiB）', '不含模型、原始媒体和所有衍生文件。', 'compute'],
+  ['freeGiB', '磁盘最低余量（GiB）', 'Go 与 compute 各自检查磁盘余量。', 'all'],
+  ['concurrency', '视频并发数', '1–16；多任务需要更多内存和硬件能力。', 'compute'],
+  ['threads', '音频 CPU 线程数', '0–8；0 为按有效核心自动选择。', 'compute'],
+  ['workerIdle', '音频空闲回收（秒）', '0–3600；各模型的驻留行为见参数手册。', 'compute'],
+  ['shm', '共享内存上限（MiB）', '容器 /dev/shm 上限，不是显存预分配。', 'compute'],
+]
+---
+<div class="compose-builder not-content" data-compose-builder>
+  <div class="builder-intro"><span class="builder-badge">单文件部署</span><p>选好配置，下载到你的服务器。无需源码、<code>.env</code> 或手动 <code>chown</code>。</p></div>
+  <div class="builder-layout">
+    <form class="builder-form" novalidate autocomplete="off">
+      <fieldset class="builder-section">
+        <legend><span>01</span> 部署什么</legend>
+        <label for="config-mode">服务组合</label>
+        <select name="mode" id="config-mode" aria-describedby="mode-help"><option value="stack">管理端 + 同机计算（推荐）</option><option value="app">仅管理端</option><option value="node">独立计算节点</option></select>
+        <p id="mode-help" class="field-help">管理端内置网页和客户端下载。计算节点负责媒体探测、转码与模型任务。</p>
+        <div data-only="compute">
+          <div class="hardware-grid" role="radiogroup" aria-label="计算硬件">
+            {presets.map(p => <label class="hardware-card"><input type="radio" name="hardware" value={p.id} checked={p.id === d.hardware} /><span><strong>{p.name}</strong><small>{p.detail}</small></span></label>)}
+          </div>
+          <p class="field-help">切换硬件会载入该预设的资源预算、端口和项目名。已有部署请重新核对这些值。</p>
+        </div>
+        <div class="compose-field" data-only="app-only"><label for="config-arch">管理端 CPU 架构</label><select name="arch" id="config-arch"><option value="amd64">AMD64 / x86_64</option><option value="arm64">ARM64 / aarch64</option></select></div>
+      </fieldset>
+      <fieldset class="builder-section">
+        <legend><span>02</span> 镜像与入口</legend>
+        <Field name="imagePrefix" label="镜像仓库 / 空间" value={d.imagePrefix} help="不带 https://；沿用现有 Docker Hub 空间，可改为实际发布的其他空间。" />
+        <div class="field-grid">
+          <div data-only="app"><Field name="appVersion" label="管理端版本" value={d.appVersion} help="latest 或实际已发布标签。镜像版本不带 Release 的 v 前缀。" /></div>
+          <div data-only="compute"><Field name="computeVersion" label="计算端版本" value={d.computeVersion} help="独立选择版本；自动追加 -cuda、-rocm 等后缀。" /></div>
+        </div>
+        <Field name="project" label="Compose 项目名" value={d.project} help="升级时保持原名。另开测试请换项目名、目录和端口。" />
+        <div class="field-grid">
+          <Field name="bind" label="宿主监听地址" value={d.bind} help="0.0.0.0 为所有网卡；127.0.0.1 仅本机；也可填局域网 IP。" />
+          <div data-only="app"><Field name="port" label="管理端口" type="number" value={d.port} help="手机/电视访问的端口；容器内部仍为 8080。" /></div>
+          <div data-only="node"><Field name="nodePort" label="独立节点端口" type="number" value={d.nodePort} help="仅供管理端连接，容器内部为 8090。" /></div>
+        </div>
+      </fieldset>
+      <fieldset class="builder-section">
+        <legend><span>03</span> 数据保存在这里</legend>
+        <Field name="dataRoot" label="数据根目录" value={d.dataRoot} help="默认 .：在 YAML 旁创建 singverse-* 目录。填写 ./data 或 Linux 绝对路径也可以。" />
+        <div data-only="app"><Field name="mediaPath" label="已有本地曲库（可选）" help="留空使用 ./singverse-media；填写真实目录后只读挂载到 /media，目录必须已存在。WebDAV 在后台配置。" placeholder="例如 /volume1/music" /></div>
+        <p class="builder-note">以容器 root 运行，避免要求固定 UID/GID。宿主生成的文件通常归 root；原始曲库只读。</p>
+        <div data-only="app">
+          <label for="config-database">业务数据库</label><select id="config-database" name="database"><option value="sqlite">SQLite（推荐，自动创建文件）</option><option value="mysql">连接已有 MySQL</option></select>
+          <div data-only="mysql" class="field-grid">
+            <Field name="mysqlHost" label="MySQL 主机" help="从业务容器可达的已有数据库，不会创建 MySQL 服务。" parameter="MYSQL_HOST" />
+            <Field name="mysqlPort" label="MySQL 端口" type="number" value={d.mysqlPort} help="数据库的监听端口。" parameter="MYSQL_PORT" />
+            <Field name="mysqlDatabase" label="数据库名" value={d.mysqlDatabase} help="请先创建专用数据库。" parameter="MYSQL_DATABASE" />
+            <Field name="mysqlUser" label="数据库账号" value={d.mysqlUser} help="需具备业务读写及迁移权限。" parameter="MYSQL_USER" />
+            <Field name="mysqlPassword" label="数据库密码" type="password" help="无默认密码。仅在页面内处理，会写入下载文件；请保护 YAML。" parameter="MYSQL_PASSWORD" />
+          </div>
+        </div>
+      </fieldset>
+      <details class="builder-section" data-only="compute" open>
+        <summary>设备映射 <span>核对宿主真实路径</span></summary>
+        <div class="details-body">
+          <div data-hardware="a3000 amd780m"><Field name="gpuId" label="宿主 GPU 编号 / NVIDIA UUID" value={d.gpuId} help="NVIDIA 填编号或 UUID；AMD 填 ROCm 数字序号。默认 0。" /></div>
+          <div data-hardware="amd780m intel"><Field name="renderDevice" label="DRM render 设备" value={d.renderDevice} help="确认此节点属于目标核显。生成器映射 /dev/dri，容器使用相同路径。" parameter="COMPUTE_HARDWARE_DEVICE" /></div>
+          <div data-hardware="rk3566">
+            <Field name="rknnCard" label="宿主 NPU card 节点" value={d.rknnCard} help="默认来自已记录的 RK3566 板端，必须核对驱动为 rknpu。" />
+            <Field name="rknnRender" label="宿主 NPU render 节点" value={d.rknnRender} help="同时映射到容器 renderD128 和 Lite2 所需的 renderD129 别名。" />
+            <Field name="rknnLibrary" label="宿主 librknnrt.so" value={d.rknnLibrary} help="需与 BSP、镜像 Lite2 2.3.2 兼容，必须是已存在的 ARM64 库文件。" />
+            <Field name="deviceTree" label="宿主设备树目录" value={d.deviceTree} help="需包含真实 compatible 文件；用于识别板型与模型目标。" />
+            <label class="checkbox-field"><input name="mpp" type="checkbox" /> 启用 MPP / RGA 视频测试</label>
+            <p class="field-help">仅在 /dev/mpp_service、/dev/rga、/dev/dma_heap 都存在时启用，并重新试跑视频后端。</p>
+          </div>
+        </div>
+      </details>
+      <details class="builder-section">
+        <summary>资源预算 <span>按可用内存和磁盘调整</span></summary>
+        <div class="details-body field-grid">{resources.map(([name, label, help, only]) => <div data-only={only}><Field name={name} label={label} help={help} type="number" step={name.includes('Cpus') || name.includes('Cache') || name === 'freeGiB' ? 'any' : '1'} value={d[name as keyof typeof d] as number} /></div>)}</div>
+      </details>
+      <details class="builder-section">
+        <summary>时区与反向代理 <span>直连可保持默认</span></summary>
+        <div class="details-body">
+          <Field name="timezone" label="时区" value={d.timezone} help="例如 Asia/Shanghai；不改变宿主系统时间。" parameter="TZ" />
+          <div data-only="app">
+            <Field name="publicOrigin" label="外部 HTTPS 来源（可选）" help="直连 HTTP 留空。仅填写 https://域名[:端口]，不带末尾斜杠或路径。" parameter="SINGVERSE_PUBLIC_ORIGIN" placeholder="https://sing.example.com" />
+            <Field name="trustedProxies" label="可信代理 IP / CIDR（可选）" help="逗号分隔，只填写实际代理地址。不能用 0.0.0.0/0 信任所有来源。" parameter="SINGVERSE_TRUSTED_PROXIES" />
+          </div>
+        </div>
+      </details>
+      <button type="reset" class="builder-button secondary">恢复当前硬件默认值</button>
+    </form>
+    <div class="builder-result">
+      <div class="result-header"><div><span class="result-label">配置预览</span><h2>docker-compose.yaml</h2></div><span class="result-state" data-result-state>已生成</span></div>
+      <p class="result-summary" data-result-summary>管理端 + 同机计算 · NVIDIA A3000</p>
+      <div class="builder-errors" data-errors role="alert" hidden></div>
+      <div class="result-actions"><button class="builder-button" type="button" data-download>下载 YAML</button><button class="builder-button secondary" type="button" data-copy>复制配置</button></div>
+      <label class="output-label" for="compose-output">完整配置（可选中复制）</label>
+      <textarea id="compose-output" class="compose-output" readonly spellcheck="false" aria-describedby="preview-help">{generate(d)}</textarea>
+      <p id="preview-help" class="field-help">修改选择后实时更新。所有变量已填写；双美元符号由 Compose 还原为字面值。</p>
+      <p class="action-status" data-action-status role="status" aria-live="polite"></p>
+      <div class="result-instructions"><h3>部署前核对</h3><ul data-notes>{notes(d).map(note => <li>{note}</li>)}</ul><a href="/docs/hardware.html">查看硬件前置条件与验证步骤 →</a></div>
+      <p class="privacy-note">配置仅在浏览器生成，不访问 NAS、不上传密码，也不写入浏览器存储。刷新页面会恢复默认。</p>
+    </div>
+  </div>
+  <noscript><p>启用 JavaScript 可交互生成；也可从<a href="/docs/getting-started.html#templates">部署指南下载固定模板</a>。</p></noscript>
+</div>
+<script>
+import { defaults, presets, validate, generate, notes } from '../../lib/deployment/compose.mjs'
+const root = document.querySelector<HTMLElement>('[data-compose-builder]')
+if (root) {
+  const form = root.querySelector('form')!
+  const output = root.querySelector<HTMLTextAreaElement>('#compose-output')!
+  const status = root.querySelector<HTMLElement>('[data-action-status]')!
+  const errorsBox = root.querySelector<HTMLElement>('[data-errors]')!
+  const copyButton = root.querySelector<HTMLButtonElement>('[data-copy]')!
+  const downloadButton = root.querySelector<HTMLButtonElement>('[data-download]')!
+  let yaml = ''
+  const read = () => {
+    const entries = Object.fromEntries(new FormData(form))
+    return { ...defaults(String(entries.hardware)), ...entries, mpp: entries.mpp === 'on' } as ReturnType<typeof defaults>
+  }
+  const sync = () => {
+    const c = read()
+    const conditions: Record<string, boolean> = { all: true, app: c.mode !== 'node', compute: c.mode !== 'app', node: c.mode === 'node', 'app-only': c.mode === 'app', mysql: c.mode !== 'node' && c.database === 'mysql' }
+    root.querySelectorAll<HTMLElement>('[data-only]').forEach(element => { element.hidden = !conditions[element.dataset.only!] })
+    root.querySelectorAll<HTMLElement>('[data-hardware]').forEach(element => { element.hidden = !element.dataset.hardware!.split(' ').includes(c.hardware) })
+    form.querySelectorAll('[aria-invalid]').forEach(element => element.removeAttribute('aria-invalid'))
+    const errors = validate(c)
+    errorsBox.replaceChildren()
+    errorsBox.hidden = errors.length === 0
+    for (const error of errors) {
+      const link = document.createElement('a'); link.href = `#config-${error.field}`; link.textContent = error.message
+      link.addEventListener('click', event => { event.preventDefault(); const field = form.elements.namedItem(error.field); if (field instanceof HTMLElement) { field.closest('details')?.setAttribute('open', ''); field.focus(); field.scrollIntoView({ block: 'center', behavior: 'smooth' }) } })
+      errorsBox.append(link)
+      const field = form.elements.namedItem(error.field); if (field instanceof HTMLElement) field.setAttribute('aria-invalid', 'true')
+    }
+    copyButton.disabled = downloadButton.disabled = errors.length > 0
+    yaml = errors.length ? '' : generate(c)
+    output.value = yaml
+    root.querySelector('[data-result-state]')!.textContent = errors.length ? '待完善' : '已生成'
+    const hardware = c.mode === 'app' ? `Linux ${c.arch}` : presets.find(p => p.id === c.hardware)!.name
+    root.querySelector('[data-result-summary]')!.textContent = `${{stack: '管理端 + 同机计算', app: '仅管理端', node: '独立计算节点'}[c.mode]} · ${hardware}`
+    root.querySelector('[data-notes]')!.replaceChildren(...notes(c).map(note => { const li = document.createElement('li'); li.textContent = note; return li }))
+    status.textContent = ''
+  }
+  const assign = (name: string, value: unknown) => { const field = form.elements.namedItem(name); if (field instanceof HTMLInputElement || field instanceof HTMLSelectElement) { if (field instanceof HTMLInputElement && field.type === 'checkbox') field.checked = Boolean(value); else field.value = String(value) } }
+  form.addEventListener('input', sync)
+  form.addEventListener('change', event => {
+    const target = event.target as HTMLInputElement
+    if (target.name === 'hardware') {
+      const d = defaults(target.value)
+      for (const key of ['project', 'port', 'appMemory', 'computeMemory', 'audioMemory', 'processMemory', 'threads', 'computeCpus', 'songCache', 'computeCache', 'shm', 'gpuId', 'arch']) assign(key, d[key as keyof typeof d])
+      if (read().mode === 'node') assign('project', 'singverse-compute-node')
+    }
+    if (target.name === 'mode') assign('project', target.value === 'node' ? 'singverse-compute-node' : defaults(read().hardware).project)
+    sync()
+  })
+  form.addEventListener('submit', event => event.preventDefault())
+  form.addEventListener('reset', event => { event.preventDefault(); const d = defaults(read().hardware); Object.entries(d).forEach(([key, value]) => assign(key, value)); sync() })
+  copyButton.addEventListener('click', async () => {
+    if (!yaml) return
+    try { await navigator.clipboard.writeText(yaml); status.textContent = '完整配置已复制。' }
+    catch { output.focus(); output.select(); status.textContent = '浏览器未允许剪贴板访问，已选中配置，请手动复制。' }
+  })
+  downloadButton.addEventListener('click', () => {
+    if (!yaml) return
+    const url = URL.createObjectURL(new Blob([yaml], { type: 'application/yaml;charset=utf-8' }))
+    const link = document.createElement('a'); link.href = url; link.download = 'docker-compose.yaml'; link.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    status.textContent = '已生成下载文件。保存到部署目录后执行指南中的启动命令。'
+  })
+  sync()
+}
+</script>

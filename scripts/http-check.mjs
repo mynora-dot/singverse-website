@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 
 const origin = new URL(process.argv[2] || 'http://127.0.0.1:18081')
-const legacy = JSON.parse(readFileSync('scripts/legacy-anchors.json', 'utf8'))
+const guidePaths = readdirSync('src/content/docs').filter(file => /\.mdx?$/.test(file)).map(file => readFileSync('src/content/docs/' + file, 'utf8').match(/^slug: "([^"]+)"$/m)[1] + '.html')
 let requests = 0
 async function request(path, status = 200, method = 'GET') {
   const response = await fetch(new URL(path, origin), { method, redirect: 'manual', signal: AbortSignal.timeout(5000) })
@@ -20,12 +20,12 @@ async function request(path, status = 200, method = 'GET') {
   return response
 }
 
-for (const path of ['/', '/index.html', '/download.html', ...Object.keys(legacy).map(path => '/' + path)]) {
+for (const path of ['/', '/index.html', '/download.html', ...guidePaths.map(path => '/' + path)]) {
   const response = await request(path)
   assert.match(response.headers.get('content-type') || '', /text\/html/)
   assert.match(await response.text(), /SingVerse/)
 }
-for (const path of Object.keys(legacy)) await request('/' + path.replace(/\.html$/, ''))
+for (const path of guidePaths) await request('/' + path.replace(/\.html$/, ''))
 assert.equal((await request('/docs', 308)).headers.get('location'), '/docs/index.html')
 assert.equal(await (await request('/healthz')).text(), 'ok\n')
 for (const path of ['/does-not-exist', '/.env', '/.git/config', '/src/content/docs/security.md', '/package-lock.json']) {
@@ -34,9 +34,13 @@ for (const path of ['/does-not-exist', '/.env', '/.git/config', '/src/content/do
 for (const method of ['POST', 'PUT', 'DELETE', 'OPTIONS']) await request('/', 405, method)
 await request('/', 200, 'HEAD')
 await request('/assets/brand/logo-mark.svg')
+for (const name of ['a3000', 'amd780m', 'intel', 'rk3566', 'app-amd64', 'app-arm64']) {
+  const response = await request('/deploy/' + name + '.yaml')
+  assert.match(await response.text(), /services:/)
+}
 await request('/pagefind/pagefind.js')
 const index = await (await request('/pagefind/pagefind-entry.json')).json()
-assert.equal(Object.values(index.languages).reduce((sum, language) => sum + language.page_count, 0), Object.keys(legacy).length + 2, 'Search index should contain all public pages without aliases/404')
+assert.equal(Object.values(index.languages).reduce((sum, language) => sum + language.page_count, 0), guidePaths.length + 2, 'Search index should contain all public pages without aliases/404')
 for (const language of Object.values(index.languages)) {
   const wasm = await request('/pagefind/wasm.' + (language.wasm || 'unknown') + '.pagefind')
   assert.match(wasm.headers.get('content-type') || '', /application\/octet-stream/)

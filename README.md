@@ -1,100 +1,80 @@
 # SingVerse 官网与文档
 
-产品首页、客户端下载说明和 18 篇使用指南，采用 **Astro + Starlight**。首页保留现有产品视觉，文档通过 Markdown 维护，目录和 Pagefind 全文搜索在构建时生成。
+Astro + Starlight 静态站。2026-11-20 依据当前 Go、compute、客户端契约和 A3000 / 780M / RK3566 部署配置，完整重写使用文档，并加入纯浏览器 Docker Compose 生成器与逐项参数手册。
 
-源码、内容和构建统一在本项目；生产环境是一个 Nginx 容器，只提供静态文件，不运行 Node，也不连接 NAS、数据库或业务后端。当前的产品介绍、部署与使用文档无需动态接口。后续有实际动态功能时，可在本项目增加 Astro 服务端路由及对应适配器，再调整运行镜像；这需要重新配置认证、请求限制和服务端密钥，不直接套用当前静态容器。
+主入口：
 
-本项目独立于 `singverse-frontend` 管理端和 NAS 下载页面，更新官网不会更新 NAS 服务或客户端。内容核对日期为 **2026-11-15**，基于相邻仓库的当前工作区；能力以实际部署版本为准。
+- `/docs/index.html`：文档首页。
+- `/docs/getting-started.html`：从现有镜像完成首次部署。
+- `/docs/compose.html`：服务、硬件、数据库、目录、资源和代理配置生成器。
+- `/docs/parameters.html`：管理端、MySQL、计算端与驱动的 56 条参数说明。
+- `/docs/hardware.html`：设备映射、驱动、运行库、模型和试跑。
 
-## 本地开发与检查
+文档共 22 篇。旧文档正文已替换；既有页面 URL 继续保留，章节按新内容重新组织。产品首页沿用现有设计，部署入口和说明已指向新流程。官网不连接 NAS，不保存管理员凭据，也不是业务管理页面。
 
-Node 版本要求见 `package.json`，Docker 构建使用固定版本的工具链。依赖由 `package-lock.json` 锁定，`.npmrc` 关闭未使用框架的 peer 自动安装，Astro/Starlight 必需的 peer 显式声明。
+## 开发与检查
+
+使用 package.json 指定的 Node 版本与已锁定依赖：
 
 ```sh
 npm ci
 npm run dev
 ```
 
-开发服务仅监听 `127.0.0.1:5174`，可用 `npm run dev -- --port 5184` 指定端口。搜索索引在生产构建时生成，验证搜索请构建后预览：
+默认监听 `127.0.0.1:5174`。生产构建才生成 Pagefind 全文索引；验证搜索使用构建预览。
 
 ```sh
 npm run check
+npm run check:compose
 npm run preview -- --port 5184
-npm run check:dependencies
 ```
 
-`check` 执行 Astro 类型检查、生产构建、安全响应头生成及内容检查，产物为 `dist/` 和 `.build/security-headers.conf`。内容检查覆盖旧版 20 个页面、18 篇文档的 176 个章节锚点、站内链接与搜索产物；额外生成 404 页面和文档首页兼容文件。依赖审计包含构建依赖，高危及以上问题会失败。
+- `check`：生成器行为测试、Astro 类型检查、静态构建、模板下载文件、安全头与内容检查。
+- `check:compose`：使用 Docker Compose CLI 解析 18 组配置，不启动容器，不依赖 Docker daemon。覆盖四种硬件、服务组合、ARM64、MPP、已有 MySQL 和特殊字符。
+- `check:content`：检查所有页面、Markdown/MDX 命令复制、参数解释、站内链接、章节和搜索产物。
+- `check:browser`：使用已安装 Chrome 运行真实桌面/移动端测试；需要本机回环监听和浏览器执行权限。通过 `CHROME_BIN` 指定其他 Chromium 可执行文件。截图和报告写到临时目录，不进入发布包。
+- `check:http`：针对网站 Nginx 实例验证路由、下载模板、搜索及响应头。
 
-## Docker 部署
+参数与业务源码的覆盖检查需显式指定检出目录，不隐式读取相邻仓库：
 
-在本目录执行：
+```sh
+npm run check:deployment-sources -- --go /absolute/singverse-go-backend --compute /absolute/singverse-compute
+```
+
+## 生成器维护
+
+| 文件 | 用途 |
+| --- | --- |
+| `src/lib/deployment/compose.mjs` | 硬件默认值、字段校验、Compose 模型、YAML 输出和提示 |
+| `src/lib/deployment/parameters.mjs` | 真实环境变量名称、默认值、类型、用途与修改影响 |
+| `src/components/deployment/ComposeBuilder.astro` | 配置表单、预览、复制、下载和错误定位 |
+| `src/components/deployment/ParameterReference.astro` | 渲染参数说明，避免人工复制多份正文 |
+| `scripts/deployment-assets.mjs` | 用相同生成逻辑构建六个固定下载模板 |
+| `scripts/compose.test.mjs` | 服务边界、参数覆盖、设备与资源、错误输入回归 |
+| `scripts/check-compose.mjs` | Docker Compose 实际解析验证 |
+
+生成器默认使用相对目录绑定、容器 root 和内置字面参数，不需要 `.env`、命名卷或 chown。支持同机组合、仅管理端和独立节点；数据库为 SQLite 或已有 MySQL，不自动创建 MySQL。所有输入只在当前页面内存使用，无 localStorage、sessionStorage、表单上传或 URL 参数保存。
+
+YAML 字符串使用 JSON 引号转义并处理 Compose 的美元符号插值，避免 `$`、引号等改变用户输入。无效配置会清空预览并禁用下载，防止拿到上一次有效配置。密码仍会出现在用户主动下载的 YAML 中，界面明确提示保管。
+
+四种运行库与硬件映射按当前 Dockerfile 区分，尤其 CUDA 的专用 Python、ROCm/RKNN 系统 Python、RKNN 库/设备树只读文件和 render 别名。生成器不探测远端标签、主机驱动或模型资格，不替代真实设备验收。
+
+## 内容维护
+
+内容在 `src/content/docs/*.md` / `*.mdx`，frontmatter 必须包含 title、description、slug、verifiedAt、group。导航由 `astro.config.mjs` 维护；显式章节 ID 由 `scripts/legacy-heading-ids.mjs` 处理。`scripts/legacy-routes.mjs` 保留 `/docs/index.html` 的兼容入口。
+
+固定模板在构建时写入被忽略的 `public/deploy/` 并复制进 dist，不手工维护第二套配置。搜索索引自动包含新文档和参数正文。来源、事实边界与本轮验证记录见 [CONTENT_SOURCES.md](CONTENT_SOURCES.md)。
+
+## 网站本身的部署
+
+下面部署的是这个公开静态官网，不是 NAS 的 Go 管理端。已有网站 Compose 可继续使用：
 
 ```sh
 docker compose up -d --build --wait
 ```
 
-默认访问 `http://127.0.0.1:18081`。容器限制为 64 MiB 内存、0.5 CPU、64 个进程，使用一个 Nginx worker；这些是资源上限，实际占用随连接数和访问负载变化。更新后重新执行同一命令，停止使用 `docker compose down`，网站不需要持久卷。
+网站默认回环端口 18081；需要避免与同机 RK3566 测试实例冲突。生产使用 Nginx，无 Node、数据库或持久业务卷。运行容器默认 64 MiB、0.5 CPU，构建阶段内存另计。
 
-64 MiB 限额只针对运行容器。Node 构建阶段需要额外内存；部署主机资源很少时，在开发机或 CI 构建镜像后再分发运行。
+网站的 `WEBSITE_IMAGE`、`WEBSITE_BIND`、`WEBSITE_PORT` 仅用于本仓库已有网站部署配置，与生成器输出的业务 YAML 不同。发布镜像和凭据设置见 [infra/docker/PUBLISHING.md](infra/docker/PUBLISHING.md)。正式域名确定后再配置 Astro `site` 生成 sitemap。
 
-也可使用工作流发布的固定版本镜像，部署机无需构建。以下版本号仅为格式示例，需替换为已发布版本；私有仓库先执行对应的 `docker login`：
-
-```sh
-export WEBSITE_IMAGE=ghcr.io/mynora-dot/singverse-website:0.0.1
-docker compose pull
-docker compose up -d --no-build --wait
-```
-
-`WEBSITE_IMAGE` 也可写入本机未跟踪的 `.env`。Docker Hub 地址、发布凭据及重试规则见[镜像发布](infra/docker/PUBLISHING.md)。
-
-部署后可运行 HTTP 验证，覆盖旧链接、无扩展名链接、搜索资源、响应头、404 和方法限制：
-
-```sh
-npm run check:http
-# 自定义端口时显式指定目标
-npm run check:http -- http://127.0.0.1:18082
-docker compose logs --tail=50
-```
-
-公网使用已有 HTTPS 反向代理转发到回环端口，并在代理配置证书、HSTS 和访问限制。代理容器若独立运行，需要明确配置可达的网站入口或共享专用网络；容器中的 `127.0.0.1` 指向自身。默认使用项目独立的 bridge 网络，网站进程无需主动访问外网，但该配置不实施网络层的出站封禁。需要局域网直接访问时，部署命令可显式指定绑定地址：
-
-```sh
-WEBSITE_BIND=192.168.1.100 WEBSITE_PORT=18081 docker compose up -d --build --wait
-```
-
-不要把 NAS 管理入口、登录 Cookie、主密钥、媒体目录或 Docker socket 配给官网容器。下载页只在浏览器生成输入地址的 `/downloads/` 链接，不请求、保存或代理该 NAS 地址。
-
-## 镜像发布
-
-`.github/workflows/website-images.yml` 参照后端发布方式，仅在正式 GitHub Release 发布后运行。标签采用 `vMAJOR.MINOR.PATCH`；普通 push、PR、草稿及 Pre-release 不触发发布，不增加独立测试或 lint job。
-
-工作流锁定标签提交，在原生 amd64、arm64 runner 分别构建并保存 OCI 归档，再把同一份产物发布到 GHCR、Docker Hub，镜像名统一为 `singverse-website`。只发布数字版本 `<VERSION>` 和 `latest`，二者均包含双架构，不再额外发布架构标签；两家固定版本全部成功后更新 `latest`。已有固定标签只接受相同摘要，失败重跑复用 Release 归档。历史标签不会自动删除，数字版本随发布累积。
-
-Actions Variables 和 Secrets 与后端同名，但需要在官网仓库配置或通过组织授权共享。完整配置见[镜像发布](infra/docker/PUBLISHING.md)。本地可运行 `npm run check:release` 检查发布脚本的版本校验、归档校验、固定标签保护及双仓库发布顺序；需要 Python 3.9 或以上版本。
-
-## 安全设置
-
-- 多阶段构建，运行镜像仅含 Nginx 和公开站点产物；Docker 构建上下文使用允许列表，排除本地环境变量、Git、依赖缓存与原始文档之外的工作区文件。
-- UID/GID `101:101`、只读根文件系统、去除全部 capabilities、禁止提权；临时写入仅允许容量受限的 `/tmp`，不使用宿主目录挂载。
-- 仅允许 GET/HEAD，隐藏文件及未知路径返回 404，关闭目录列表与服务器版本号。日志仅记录路径，不记录 URL 查询参数。
-- CSP 默认禁止资源，脚本只允许同源资源与本次构建生成的 SHA-256 哈希；禁止内联事件处理、JavaScript eval、页面嵌入及对象插件。Pagefind 的 WebAssembly 使用单独的 `wasm-unsafe-eval` 权限。现有插图保留内联样式属性。
-- `nosniff`、禁止嵌入、无 Referer 和摄像头/麦克风/定位禁用响应头覆盖成功和错误响应。HTTPS、HSTS 由外层 TLS 代理负责。
-
-每次修改 HTML 后都必须重新构建，安全哈希与产物配套复制。依赖与基础镜像仍需要定期更新；`npm run check:dependencies` 审计 npm 依赖，镜像可用 `docker scout cves singverse-website:local` 或现有镜像扫描流程检查。容器隔离和响应头不能替代宿主机、反向代理及供应链维护。
-
-## 内容维护
-
-| 位置 | 用途 |
-| --- | --- |
-| `src/pages/index.astro`、`download.astro` | 产品首页与下载说明 |
-| `src/content/docs/*.md` | 18 篇 Markdown 指南 |
-| `src/components/`、`src/layouts/` | 共享导航、文档标题、搜索与页面布局 |
-| `astro.config.mjs` | 文档分组、Starlight 及静态构建配置 |
-| `scripts/legacy-anchors.json` | 已有文档路径和章节 ID，防止深链接丢失 |
-| `infra/nginx/nginx.conf` | 静态文件服务及请求边界 |
-
-文档 frontmatter 必须包含标题、描述、固定 `slug`、`verifiedAt` 与分组。章节用 `## 标题 {#原有-id}` 显式保留深链接；新增文档时更新侧栏和内容检查基准。旧 `/docs/*.html` 和无扩展名链接均可访问，站点默认部署于域名根路径。
-
-正式域名确定后，在 `astro.config.mjs` 设置 Astro 的 `site` 再构建，以生成对应 sitemap；当前未指定正式域名，因此构建时跳过 sitemap。
-
-搜索在构建时读取真实页面内容生成索引，查询与结果渲染均在浏览器完成，不维护额外后端服务。事实依据与功能边界见 [CONTENT_SOURCES.md](CONTENT_SOURCES.md)，设计稿、样例数据和历史验证不能作为已发布能力或设备验收结论。
+现有 Nginx 继续限制 GET/HEAD、隐藏文件访问和目录索引，使用与本次构建匹配的 CSP 哈希、安全响应头和 Pagefind WASM 权限；新生成器无需开放额外外域或内联脚本权限。HTTP 验证需要针对真实 Nginx 实例运行。修改 HTML 后必须重建安全头，不复用旧哈希。
