@@ -33,15 +33,15 @@ Release tag 必须为 `vMAJOR.MINOR.PATCH`，例如 `v0.0.1` 对应镜像版本 
 
 1. 检查正式 Release、锁定完整提交，并校验两家目标变量和密钥是否齐全。
 2. 在原生 `ubuntu-24.04`、`ubuntu-24.04-arm` runner 构建 `linux/amd64`、`linux/arm64`。Dockerfile 的构建步骤保留原有 Astro 类型、内容及安全头生成检查。
-3. 将每个架构的 OCI 归档连同 SHA-256 记录保存为同一 Release 的附件，作为发布与重试的唯一 OCI 来源。运行镜像不含发布凭据和发布工具。
+3. 将每个架构的镜像保留摘要保存到 GHCR 的独立缓存包，作为发布与重试的固定来源。GitHub Release 不上传 Docker/OCI 镜像、归档清单或分片。运行镜像不含发布凭据和发布工具。
 4. 使用 Skopeo 将完整多架构索引及其引用的镜像层保留摘要复制到两家仓库，只发布数字版本标签，架构清单通过摘要引用。已有固定标签摘要不同即失败，认证及网络错误不会被当作标签不存在。
 5. 两家固定版本全部通过后更新 `latest`。跨仓库更新不具备事务性，更新中断时重跑同一次运行可恢复。
 
-每个架构的逻辑归档名为 `website-amd64.oci.tar` 或 `website-arm64.oci.tar`。Release 附件采用 `*.oci.tar.json` 清单及含摘要的 `*.partNNNN-*` 分片；清单最后上传，中断后的重试可复用已上传分片。OCI 不再重复上传到 Actions artifacts，发布任务直接读取 Release 附件。
+每个架构的逻辑归档名为 `website-amd64.oci.tar` 或 `website-arm64.oci.tar`，仅用于 runner 本地的构建与发布交接。固定镜像保存在 `ghcr.io/<GHCR_NAMESPACE>/singverse-website-buildcache:release-<version>-<SOURCE_REVISION>-website-<arch>`，与可变的构建层缓存标签隔离。恢复时按镜像摘要拉取并复核，不通过 Release 附件或 Actions artifacts 传递镜像。
 
-失败后选择同一次运行的 Re-run failed jobs。发布任务直接从 Release 恢复两个架构的归档，构建任务重跑也先校验并复用归档，跳过 Buildx 设置、缓存登录和重新构建，避免重建时间变化产生不同的固定版本内容。归档和固定镜像均不覆盖不同内容；不要删除或替换已发布附件、移动版本 tag。修改源码或工作流后应发布新版本，重跑旧记录不会使用新代码。
+失败后选择同一次运行的 Re-run failed jobs。发布任务从 GHCR 缓存恢复两个架构的镜像，构建任务重跑也先校验并复用镜像，跳过 Buildx 设置和重新构建，避免重建时间变化产生不同的固定版本内容。缓存镜像和正式固定镜像均不覆盖不同内容；不要删除这些重试缓存或移动版本 tag。修改源码或工作流后应发布新版本，重跑旧记录不会使用新代码。已有 Release 中的历史 OCI 附件不会自动删除。
 
-Action 依赖固定到核对过的完整提交 SHA。顶层 token 只有 `contents: read`，构建任务获得 Release 附件所需的 `contents: write` 和缓存所需的 `packages: write`，推送任务获得 `packages: write`。GHCR 凭据只在缓存和推送步骤使用，Docker Hub 凭据只在配置检查和推送步骤使用，通过标准输入传给 Skopeo，不作为 Docker 构建参数。
+Action 依赖固定到核对过的完整提交 SHA。顶层 token 只有 `contents: read`，构建和推送任务获得缓存与镜像发布所需的 `packages: write`，不再需要 Release 附件写权限。GHCR 凭据只在缓存和推送步骤使用，Docker Hub 凭据只在配置检查和推送步骤使用，通过标准输入传给 Skopeo，不作为 Docker 构建参数。
 
 ## 镜像地址与部署
 

@@ -46,12 +46,13 @@ jobs:
   build:
     needs: preflight
     permissions:
-      contents: write
+      contents: read
       packages: write
     env:
-      GH_TOKEN: ${{ github.token }}
       SOURCE_REVISION: ${{ needs.preflight.outputs.revision }}
       SINGVERSE_VERSION: ${{ needs.preflight.outputs.version }}
+      GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
     strategy:
       fail-fast: false
       matrix:
@@ -67,19 +68,23 @@ jobs:
         with:
           ref: ${{ needs.preflight.outputs.revision }}
           persist-credentials: false
-      - name: Restore the immutable release archive for retries
+      - name: Use the preinstalled registry copy tool
+        run: |
+          if ! command -v skopeo >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends skopeo
+          fi
+      - name: Authenticate the registry caches
+        run: |
+          printf '%s' "$GHCR_TOKEN" | skopeo login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+      - name: Restore the immutable image from the registry cache for retries
         id: archive
         env:
           ARCH: ${{ matrix.arch }}
         run: python3 infra/docker/release-artifact.py restore --name "website-$ARCH.oci.tar"
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         if: steps.archive.outputs.found != 'true'
-      - name: Authenticate the shared build cache
-        if: steps.archive.outputs.found != 'true'
-        env:
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
-        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
       - name: Build the architecture release archive
         if: steps.archive.outputs.found != 'true'
         env:
@@ -99,7 +104,7 @@ jobs:
       - name: Release local build cache before preserving the archive
         if: steps.archive.outputs.found != 'true'
         run: docker buildx prune --all --force
-      - name: Preserve the archive before publishing any image tag
+      - name: Preserve the image in the registry cache before publishing
         if: steps.archive.outputs.found != 'true'
         env:
           ARCH: ${{ matrix.arch }}
@@ -113,7 +118,7 @@ jobs:
       contents: read
       packages: write
     env:
-      GH_TOKEN: ${{ github.token }}
+      SOURCE_REVISION: ${{ needs.preflight.outputs.revision }}
       SINGVERSE_VERSION: ${{ needs.preflight.outputs.version }}
       GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
       GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
@@ -130,15 +135,15 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y --no-install-recommends skopeo
           fi
-      - name: Restore immutable Release archives
+      - name: Authenticate all destinations without printing credentials
+        run: |
+          printf '%s' "$GHCR_TOKEN" | skopeo login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+          printf '%s' "$DOCKERHUB_TOKEN" | skopeo login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
+      - name: Restore immutable images from the registry cache
         run: |
           for arch in amd64 arm64; do
             python3 infra/docker/release-artifact.py restore --name "website-$arch.oci.tar" \
               --archive "artifacts/website-$arch/image.tar"
           done
-      - name: Authenticate all destinations without printing credentials
-        run: |
-          printf '%s' "$GHCR_TOKEN" | skopeo login ghcr.io --username "$GHCR_USERNAME" --password-stdin
-          printf '%s' "$DOCKERHUB_TOKEN" | skopeo login docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
       - name: Publish immutable images to all registries, then update latest
         run: python3 -u infra/docker/release.py publish --artifacts artifacts

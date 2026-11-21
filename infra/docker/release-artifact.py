@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Preserve checked OCI archives in immutable GitHub Release assets, with retryable parts."""
+"""Cache checked OCI images in GHCR; publish only final files as Release assets."""
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import sys
@@ -15,8 +16,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 from build_version import release_version
 
 ROOT = Path(__file__).resolve().parents[2]
-PART_SIZE = 1 << 30  # Keep each asset below GitHub's 2 GiB limit.
-HEX = re.compile(r"[a-f0-9]{64}")
+spec = importlib.util.spec_from_file_location("image_publisher", Path(__file__).with_name("release.py"))
+publisher = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(publisher)
 
 
 def digest(path):
@@ -29,13 +31,63 @@ def digest(path):
 
 def context(name):
     if not re.fullmatch(r"[a-z][a-z0-9-]*-(?:amd64|arm64)\.oci\.tar", name):
-        raise ValueError("Invalid OCI logical asset name")
+        raise ValueError("Invalid OCI logical name")
     repository = os.environ["GITHUB_REPOSITORY"]
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise ValueError("Invalid GitHub repository")
     release_version()
-    tag = os.environ["RELEASE_TAG"]
-    return repository, tag
+    return repository, os.environ["RELEASE_TAG"]
+
+
+def cache_reference(repository, tag, name):
+    """Keep retries for one source revision separate from all other builds."""
+    version = release_version(dict(os.environ, RELEASE_TAG=tag))
+    revision = os.environ.get("SOURCE_REVISION", "")
+    if not re.fullmatch(r"[a-f0-9]{40}", revision):
+        raise ValueError("SOURCE_REVISION must be the locked full source commit")
+    namespace = os.environ.get("GHCR_NAMESPACE") or repository.split("/")[0].lower()
+    if not re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", namespace):
+        raise ValueError("Invalid GHCR namespace")
+    image = os.environ.get("OCI_CACHE_IMAGE") or repository.split("/")[1].lower() + "-buildcache"
+    if not re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", image):
+        raise ValueError("Invalid OCI cache image name")
+    cache_tag = f"release-{version}-{revision}-{name.removesuffix('.oci.tar')}"
+    if len(cache_tag) > 128:
+        raise ValueError("OCI cache tag is too long")
+    return f"ghcr.io/{namespace}/{image}:{cache_tag}"
+
+
+def archive_digest(source):
+    raw = subprocess.check_output(["skopeo", "inspect", "--raw", "oci-archive:" + str(source)],
+                                  timeout=publisher.COPY_TIMEOUT_SECONDS)
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def restore(repository, tag, name, destination):
+    reference = cache_reference(repository, tag, name)
+    expected = publisher.remote_digest(reference)
+    if expected is None:
+        return False
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="release-oci-", dir=destination.parent) as temporary:
+        stage = Path(temporary) / "image.tar"
+        # Pin the read to its digest even if a registry tag changes during the copy.
+        pinned = reference.rsplit(":", 1)[0] + "@" + expected
+        publisher.copy_image("docker://" + pinned, "oci-archive:" + str(stage))
+        if archive_digest(stage) != expected:
+            raise ValueError("Restored OCI image digest mismatch")
+        stage.replace(destination)
+    return True
+
+
+def save(repository, tag, name, source):
+    if not source.is_file() or source.stat().st_size <= 0:
+        raise ValueError("Checked OCI archive is missing")
+    reference = cache_reference(repository, tag, name)
+    expected = archive_digest(source)
+    # The registry cache is immutable just like the final versioned image.
+    publisher.ensure(reference, expected, lambda: publisher.copy_image(
+        "oci-archive:" + str(source), "docker://" + reference))
 
 
 def lookup(repository, tag, name):
@@ -43,15 +95,15 @@ def lookup(repository, tag, name):
     record = json.loads(subprocess.check_output(
         ["gh", "api", "repos/" + repository + "/releases/tags/" + tag], text=True))
     if record.get("tag_name") != tag or record.get("draft") or record.get("prerelease"):
-        raise ValueError("Only the exact formal release may hold OCI artifacts")
+        raise ValueError("Only the exact formal release may hold final assets")
     matches = [asset for asset in record["assets"] if asset["name"] == name]
     if len(matches) > 1:
-        raise ValueError("Ambiguous OCI release asset")
+        raise ValueError("Ambiguous Release asset")
     if not matches:
         return None
     asset = matches[0]
     if asset.get("state") != "uploaded" or not isinstance(asset.get("id"), int) or not isinstance(asset.get("size"), int) or asset["size"] <= 0:
-        raise ValueError("Incomplete OCI release asset")
+        raise ValueError("Incomplete Release asset")
     return asset
 
 
@@ -61,53 +113,10 @@ def download(repository, asset, destination):
                         "repos/" + repository + "/releases/assets/" + str(asset["id"])],
                        stdout=target, check=True)
     if destination.stat().st_size != asset["size"]:
-        raise ValueError("Downloaded OCI asset size mismatch")
+        raise ValueError("Downloaded Release asset size mismatch")
     expected = asset.get("digest")
     if expected is not None and expected != "sha256:" + digest(destination):
-        raise ValueError("Downloaded OCI asset digest mismatch")
-
-
-def restore(repository, tag, name, destination):
-    # Read older single-asset caches as well as bounded multipart archives.
-    direct = lookup(repository, tag, name)
-    index = None if direct else lookup(repository, tag, name + ".json")
-    if direct is None and index is None:
-        return False
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="release-oci-", dir=destination.parent) as temporary:
-        folder = Path(temporary)
-        stage = folder / name
-        if direct is not None:
-            download(repository, direct, stage)
-        else:
-            if index["size"] > 1 << 20:
-                raise ValueError("OCI part manifest is too large")
-            metadata = folder / "manifest.json"
-            download(repository, index, metadata)
-            manifest = json.loads(metadata.read_text())
-            parts = manifest.get("parts")
-            if manifest.get("schemaVersion") != 1 or manifest.get("name") != name or not isinstance(manifest.get("size"), int) or manifest["size"] <= 0 or not isinstance(manifest.get("sha256"), str) or not HEX.fullmatch(manifest["sha256"]) or not isinstance(parts, list) or not 1 <= len(parts) <= 512:
-                raise ValueError("Invalid OCI part manifest")
-            with stage.open("wb") as target:
-                for number, part in enumerate(parts):
-                    checksum = part.get("sha256", "")
-                    expected_name = name + ".part%04d-" % number + checksum
-                    if not isinstance(checksum, str) or not HEX.fullmatch(checksum) or part.get("name") != expected_name or not isinstance(part.get("size"), int) or not 0 < part["size"] <= PART_SIZE:
-                        raise ValueError("Invalid OCI part record")
-                    asset = lookup(repository, tag, expected_name)
-                    if asset is None or asset["size"] != part["size"]:
-                        raise ValueError("Missing OCI archive part")
-                    chunk = folder / "part"
-                    download(repository, asset, chunk)
-                    if digest(chunk) != checksum:
-                        raise ValueError("OCI part checksum mismatch")
-                    with chunk.open("rb") as source:
-                        shutil.copyfileobj(source, target)
-                    chunk.unlink()
-            if stage.stat().st_size != manifest["size"] or digest(stage) != manifest["sha256"]:
-                raise ValueError("OCI archive checksum mismatch")
-        stage.replace(destination)
-    return True
+        raise ValueError("Downloaded Release asset digest mismatch")
 
 
 def save_file(repository, tag, name, source):
@@ -117,49 +126,10 @@ def save_file(repository, tag, name, source):
         if asset is not None:
             download(repository, asset, stage)
             if digest(source) != digest(stage):
-                raise ValueError("Existing immutable OCI asset has different content")
+                raise ValueError("Existing immutable Release asset has different content")
             return
         shutil.copyfile(source, stage)
         subprocess.run(["gh", "release", "upload", tag, str(stage), "--repo", repository], check=True)
-
-
-def save(repository, tag, name, source):
-    if not source.is_file() or source.stat().st_size <= 0:
-        raise ValueError("Checked OCI archive is missing")
-    if source.stat().st_size > PART_SIZE * 512:
-        raise ValueError("OCI archive exceeds supported cache size")
-    with tempfile.TemporaryDirectory(prefix="release-oci-") as temporary:
-        folder = Path(temporary)
-        existing = folder / name
-        if restore(repository, tag, name, existing):
-            if digest(existing) != digest(source):
-                raise ValueError("Existing immutable OCI asset has different content")
-            return
-        parts = []
-        with source.open("rb") as archive:
-            while True:
-                chunk = folder / "part"
-                remaining = PART_SIZE
-                with chunk.open("wb") as target:
-                    while remaining:
-                        data = archive.read(min(1 << 20, remaining))
-                        if not data:
-                            break
-                        target.write(data)
-                        remaining -= len(data)
-                if chunk.stat().st_size == 0:
-                    chunk.unlink()
-                    break
-                checksum = digest(chunk)
-                part_name = name + ".part%04d-" % len(parts) + checksum
-                save_file(repository, tag, part_name, chunk)
-                parts.append(dict(name=part_name, size=chunk.stat().st_size, sha256=checksum))
-                chunk.unlink()
-        manifest = folder / "manifest.json"
-        manifest.write_text(json.dumps(dict(schemaVersion=1, name=name, size=source.stat().st_size,
-                                            sha256=digest(source), parts=parts), separators=(",", ":")) + "\n")
-        # Publish this pointer last. Interrupted uploads leave reusable content-addressed parts.
-        save_file(repository, tag, name + ".json", manifest)
 
 
 def main():
@@ -178,7 +148,7 @@ def main():
         print("Reused checked OCI archive" if found else "No checked OCI archive; build required")
     else:
         save(repository, tag, args.name, args.archive)
-        print("Saved checked immutable OCI archive")
+        print("Saved checked immutable OCI image in GHCR")
 
 
 if __name__ == "__main__":

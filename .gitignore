@@ -30,3 +30,11 @@ credentials*.json
 *.keystore
 *.token
 secrets/
+
+# Local release credentials and private artifacts
+/.docker/
+/.config/gh/
+/.gh/
+/.private-release/
+credentials.json
+credentials.*.json
