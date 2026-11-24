@@ -4,7 +4,7 @@
 
 ## 触发与版本
 
-先提交并推送官网源码、Dockerfile 和工作流，再创建指向该提交的正式 GitHub Release。只有 `release.published` 事件执行发布，草稿和 Pre-release 跳过；普通 push、PR、单独推送 tag 不发布，不提供手动 dispatch 入口，也不增加独立测试、lint 或验收 job。
+先提交并推送官网源码、Dockerfile 和工作流，再为该提交创建注释标签和中文 Release 草稿。只有 `release.published` 事件执行发布，草稿和 Pre-release 跳过；普通 push、PR、单独推送 tag 不发布，不提供手动 dispatch 入口，也不增加独立测试、lint 或验收 job。[中文标签与发布说明](https://github.com/mynora-dot/singverse-go-backend/blob/main/docs/multi-repository.md#中文标签与发布说明)
 
 Release tag 必须为 `vMAJOR.MINOR.PATCH`，例如 `v0.0.1` 对应镜像版本 `0.0.1`。版本来自 Release 标签，不需要 VERSION 文件或版本变量。工作流通过 GitHub API 校验正式 Release 并解析标签的完整提交 SHA，两个架构及发布任务都使用这一提交，不使用可变的分支 HEAD。
 

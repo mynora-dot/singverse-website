@@ -35,7 +35,7 @@ SingVerse 由一个业务管理端和可选的计算端组成。管理端负责�
 | 加歌 → 下载歌曲 / 缺歌心愿 | 自备音源下载、处理家庭缺歌反馈 | [下载](/docs/resources.html)、[播放与反馈](/docs/activity.html) |
 | 整理 → 歌曲信息 / 原唱与伴奏 | 元数据审核、音轨标记、生成伴奏 | [资料](/docs/metadata.html)、[音频](/docs/audio.html) |
 | 曲库 → 歌曲 / 歌手 / 歌单 / 收藏 | 查找和组织歌曲 | [收藏与歌单](/docs/collections.html) |
-| 客厅 → 播放与热门 / 电视首页 / 客户端下载 | 家庭播放与设备体验 | [电视](/docs/tv.html) |
+| 客厅 → 播放与热门 / 客户端下载 | 家庭播放与设备体验 | [电视](/docs/tv.html) |
 | 设置 → 计算服务 / 存储与缓存 | 节点、模型、缓存策略 | [计算](/docs/compute.html)、[系统设置](/docs/advanced.html) |
 | 设置 → 账号与安全 | 密码、MFA、会话恢复 | [安全](/docs/security.html) |
 | 任务中心 | 查看批次、阶段和失败原因 | [任务](/docs/tasks.html) |
