@@ -15,11 +15,14 @@ function decode(text) {
     .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
 }
 const files = filesUnder(root)
-const pages = files.filter(file => file.endsWith('.html'))
+const filePaths = new Set(files)
+const pages = new Map(
+  files.filter(file => file.endsWith('.html')).map(file => [file, readFileSync(file, 'utf8')])
+)
 const ids = new Map()
-let links = 0, codeBlocks = 0
-for (const file of pages) {
-  const html = readFileSync(file, 'utf8')
+let links = 0
+let codeBlocks = 0
+for (const [file, html] of pages) {
   const found = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => decode(match[1]))
   assert.equal(new Set(found).size, found.length, relative(root, file) + ': duplicate IDs: ' + found.filter((id, index) => found.indexOf(id) !== index).join(', '))
   ids.set(file, new Set(found))
@@ -32,25 +35,27 @@ const guides = readdirSync('src/content/docs').filter(file => /\.mdx?$/.test(fil
 for (const guide of guides) {
   const markdown = readFileSync('src/content/docs/' + guide, 'utf8')
   const slug = markdown.match(/^slug: "([^"]+)"$/m)?.[1]
+  const verifiedAt = markdown.match(/^verifiedAt: "(\d{4}-\d{2}-\d{2})"$/m)?.[1]
   assert.ok(slug, guide + ': missing explicit slug')
+  assert.ok(verifiedAt, guide + ': missing verification date')
   const file = resolve(root, slug + '.html')
-  assert.ok(ids.has(file), guide + ': missing rendered guide')
-  const html = readFileSync(file, 'utf8')
-  assert.match(html, /<time datetime="2026-11-20">/, guide + ': old verification date')
+  const html = pages.get(file)
+  assert.ok(html, guide + ': missing rendered guide')
+  assert.ok(html.includes('<time datetime="' + verifiedAt + '">'), guide + ': verification date differs from source')
   const expectedCode = [...markdown.matchAll(/^(`{3,})[^\n]*\n([\s\S]*?)\n\1$/gm)].map(match => match[2])
   const copiedCode = [...html.matchAll(/\bdata-code="([^"]*)"/g)].map(match => decode(match[1]).replace(/\u007f/g, '\n'))
   assert.deepEqual(copiedCode, expectedCode, guide + ': copied code differs from source')
   codeBlocks += expectedCode.length
 }
-for (const file of pages) {
-  for (const match of readFileSync(file, 'utf8').matchAll(/\b(?:href|src)="([^"]+)"/g)) {
+for (const [file, html] of pages) {
+  for (const match of html.matchAll(/\b(?:href|src)="([^"]+)"/g)) {
     const value = decode(match[1])
     if (/^(?:https?:|mailto:|tel:|data:)/i.test(value)) continue
     assert.ok(!value.startsWith('//'), file + ': unexpected remote asset/link')
     const url = new URL(value, 'https://static.invalid/' + relative(root, file))
     const path = decodeURIComponent(url.pathname)
     const choices = [resolve(root, '.' + path), resolve(root, '.' + path + '.html'), resolve(root, '.' + path, 'index.html')]
-    const target = choices.find(candidate => files.includes(candidate))
+    const target = choices.find(candidate => filePaths.has(candidate))
     assert.ok(target, relative(root, file) + ': missing ' + value)
     if (target.endsWith('.html') && url.hash) assert.ok(ids.get(target)?.has(decodeURIComponent(url.hash.slice(1))), relative(root, file) + ': missing anchor ' + value)
     links++
@@ -65,4 +70,10 @@ for (const path of files) {
   assert.doesNotMatch(relative(root, path), /(^|\/)(?:\.env(?:\.[^/]+)?|\.git|node_modules|src|package-lock\.json)(?:\/|$)/, 'Source or secret in public output')
   assert.ok(!path.endsWith('.map'), 'Source map in public output: ' + path)
 }
-console.log('Content checks passed:', { pages: pages.length, guides: guides.length, parameterEntries: parameterGroups.reduce((count, group) => count + group.items.length, 0), codeBlocks, localLinks: links })
+console.log('Content checks passed:', {
+  pages: pages.size,
+  guides: guides.length,
+  parameterEntries: parameterGroups.reduce((count, group) => count + group.items.length, 0),
+  codeBlocks,
+  localLinks: links
+})

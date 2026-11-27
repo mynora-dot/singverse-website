@@ -34,11 +34,7 @@
 
 ## 验证方式
 
-- `npm run check` 覆盖生成器行为、类型、生产构建、代码复制、参数正文、站内链接和 Pagefind 产物。
-- `npm run check:deployment-sources -- --go ... --compute ...` 将参数名称与明确指定的真实源码核对。
-- `npm run check:compose` 由 Docker Compose 解析 18 组输出，不启动业务容器。
-- `npm run check:browser` 用真实 Chrome 检查四种硬件、服务切换、错误输入、复制/下载、参数搜索，以及桌面和窄屏页面。
-- 浏览器验证使用本次构建的 CSP；网站 Nginx 的独立 HTTP 检查由 `check:http` 完成。
+- `npm run check` 运行 Astro 类型检查和生产构建，再核对代码复制、参数正文、站内链接和 Pagefind 产物。
 
 ## 本轮实际结果
 

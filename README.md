@@ -25,21 +25,11 @@ npm run dev
 
 ```sh
 npm run check
-npm run check:compose
 npm run preview -- --port 5184
 ```
 
-- `check`：生成器行为测试、Astro 类型检查、静态构建、模板下载文件、安全头与内容检查。
-- `check:compose`：使用 Docker Compose CLI 解析 18 组配置，不启动容器，不依赖 Docker daemon。覆盖四种硬件、服务组合、ARM64、MPP、已有 MySQL 和特殊字符。
+- `check`：Astro 类型检查、静态构建及产物检查。
 - `check:content`：检查所有页面、Markdown/MDX 命令复制、参数解释、站内链接、章节和搜索产物。
-- `check:browser`：使用已安装 Chrome 运行真实桌面/移动端测试；需要本机回环监听和浏览器执行权限。通过 `CHROME_BIN` 指定其他 Chromium 可执行文件。截图和报告写到临时目录，不进入发布包。
-- `check:http`：针对网站 Nginx 实例验证路由、下载模板、搜索及响应头。
-
-参数与业务源码的覆盖检查需显式指定检出目录，不隐式读取相邻仓库：
-
-```sh
-npm run check:deployment-sources -- --go /absolute/singverse-go-backend --compute /absolute/singverse-compute
-```
 
 ## 生成器维护
 
@@ -50,8 +40,6 @@ npm run check:deployment-sources -- --go /absolute/singverse-go-backend --comput
 | `src/components/deployment/ComposeBuilder.astro` | 配置表单、预览、复制、下载和错误定位 |
 | `src/components/deployment/ParameterReference.astro` | 渲染参数说明，避免人工复制多份正文 |
 | `scripts/deployment-assets.mjs` | 用相同生成逻辑构建六个固定下载模板 |
-| `scripts/compose.test.mjs` | 服务边界、参数覆盖、设备与资源、错误输入回归 |
-| `scripts/check-compose.mjs` | Docker Compose 实际解析验证 |
 
 生成器默认使用相对目录绑定、容器 root 和内置字面参数，不需要 `.env`、命名卷或 chown。支持同机组合、仅管理端和独立节点；数据库为 SQLite 或已有 MySQL，不自动创建 MySQL。所有输入只在当前页面内存使用，无 localStorage、sessionStorage、表单上传或 URL 参数保存。
 

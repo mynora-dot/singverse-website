@@ -3,30 +3,20 @@
 import argparse
 import hashlib
 import importlib.util
-import json
 import os
-import sys
-from pathlib import Path
 import re
-import shutil
 import subprocess
+import sys
 import tempfile
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-from build_version import release_version
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+from build_version import release_version
+
 spec = importlib.util.spec_from_file_location("image_publisher", Path(__file__).with_name("release.py"))
 publisher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(publisher)
-
-
-def digest(path):
-    result = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            result.update(chunk)
-    return result.hexdigest()
 
 
 def context(name):
@@ -88,48 +78,6 @@ def save(repository, tag, name, source):
     # The registry cache is immutable just like the final versioned image.
     publisher.ensure(reference, expected, lambda: publisher.copy_image(
         "oci-archive:" + str(source), "docker://" + reference))
-
-
-def lookup(repository, tag, name):
-    # Network/auth errors are failures, never cache misses.
-    record = json.loads(subprocess.check_output(
-        ["gh", "api", "repos/" + repository + "/releases/tags/" + tag], text=True))
-    if record.get("tag_name") != tag or record.get("draft") or record.get("prerelease"):
-        raise ValueError("Only the exact formal release may hold final assets")
-    matches = [asset for asset in record["assets"] if asset["name"] == name]
-    if len(matches) > 1:
-        raise ValueError("Ambiguous Release asset")
-    if not matches:
-        return None
-    asset = matches[0]
-    if asset.get("state") != "uploaded" or not isinstance(asset.get("id"), int) or not isinstance(asset.get("size"), int) or asset["size"] <= 0:
-        raise ValueError("Incomplete Release asset")
-    return asset
-
-
-def download(repository, asset, destination):
-    with destination.open("wb") as target:
-        subprocess.run(["gh", "api", "-H", "Accept: application/octet-stream",
-                        "repos/" + repository + "/releases/assets/" + str(asset["id"])],
-                       stdout=target, check=True)
-    if destination.stat().st_size != asset["size"]:
-        raise ValueError("Downloaded Release asset size mismatch")
-    expected = asset.get("digest")
-    if expected is not None and expected != "sha256:" + digest(destination):
-        raise ValueError("Downloaded Release asset digest mismatch")
-
-
-def save_file(repository, tag, name, source):
-    asset = lookup(repository, tag, name)
-    with tempfile.TemporaryDirectory(prefix="release-oci-") as temporary:
-        stage = Path(temporary) / name
-        if asset is not None:
-            download(repository, asset, stage)
-            if digest(source) != digest(stage):
-                raise ValueError("Existing immutable Release asset has different content")
-            return
-        shutil.copyfile(source, stage)
-        subprocess.run(["gh", "release", "upload", tag, str(stage), "--repo", repository], check=True)
 
 
 def main():
